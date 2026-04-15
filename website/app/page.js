@@ -1,3 +1,5 @@
+import Extractor from './components/Extractor';
+
 export default function Home() {
   const marqueeText = "COLORS // TYPOGRAPHY // SPACING // LAYOUT // SHADOWS // ACCESSIBILITY // COMPONENTS // ANIMATIONS // BREAKPOINTS // CSS VARIABLES // INTERACTIONS // RESPONSIVE // FIGMA // TAILWIND // REACT // SHADCN // ";
 
@@ -140,6 +142,17 @@ export default function Home() {
         </p>
         <div className="hero-cmd" style={{ display: 'inline-block' }}>
           npx skills add Manavarya09/design-extract
+        </div>
+      </section>
+
+      {/* ── TRY IT ── */}
+      <section className="section-red" id="try">
+        <div className="section-inner">
+          <h2 className="section-title">Try It</h2>
+          <p style={{ fontSize: '18px', lineHeight: '1.6', marginBottom: '32px', maxWidth: '600px' }}>
+            Paste any URL. We&apos;ll extract the full design language and let you download all 8 files as a ZIP.
+          </p>
+          <Extractor />
         </div>
       </section>
 

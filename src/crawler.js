@@ -5,9 +5,13 @@ import { join } from 'path';
 const MAX_ELEMENTS = 5000;
 
 export async function crawlPage(url, options = {}) {
-  const { width = 1280, height = 800, wait = 0, dark = false, depth = 0, screenshots = false, outDir = '' } = options;
+  const { width = 1280, height = 800, wait = 0, dark = false, depth = 0, screenshots = false, outDir = '', executablePath, browserArgs } = options;
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    ...(executablePath && { executablePath }),
+    ...(browserArgs && { args: browserArgs }),
+  });
   const context = await browser.newContext({
     viewport: { width, height },
     colorScheme: 'light',
