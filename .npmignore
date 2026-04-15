@@ -1,0 +1,7 @@
+designlang.png
+test-output/
+design-extract-output/
+design-diff-output/
+design-brands-output/
+*.log
+.DS_Store
