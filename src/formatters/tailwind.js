@@ -1,3 +1,20 @@
+import { rgbToHex, rgbToHsl } from '../utils.js';
+
+function generateColorScale(hex, parsed) {
+  const { h, s } = rgbToHsl(parsed);
+  const scale = {};
+  const levels = [
+    { name: '50', l: 97 }, { name: '100', l: 94 }, { name: '200', l: 86 },
+    { name: '300', l: 76 }, { name: '400', l: 64 }, { name: '500', l: 50 },
+    { name: '600', l: 40 }, { name: '700', l: 32 }, { name: '800', l: 24 },
+    { name: '900', l: 16 }, { name: '950', l: 10 },
+  ];
+  for (const { name, l } of levels) {
+    scale[name] = `hsl(${h}, ${s}%, ${l}%)`;
+  }
+  return scale;
+}
+
 export function formatTailwind(design) {
   const config = {
     colors: {},
@@ -12,10 +29,19 @@ export function formatTailwind(design) {
     transitionTimingFunction: {},
   };
 
-  // Colors
-  if (design.colors.primary) config.colors.primary = design.colors.primary.hex;
-  if (design.colors.secondary) config.colors.secondary = design.colors.secondary.hex;
-  if (design.colors.accent) config.colors.accent = design.colors.accent.hex;
+  // Colors — generate full scales from brand colors
+  if (design.colors.primary) {
+    config.colors.primary = generateColorScale(design.colors.primary.hex, design.colors.primary);
+    config.colors.primary.DEFAULT = design.colors.primary.hex;
+  }
+  if (design.colors.secondary) {
+    config.colors.secondary = generateColorScale(design.colors.secondary.hex, design.colors.secondary);
+    config.colors.secondary.DEFAULT = design.colors.secondary.hex;
+  }
+  if (design.colors.accent) {
+    config.colors.accent = generateColorScale(design.colors.accent.hex, design.colors.accent);
+    config.colors.accent.DEFAULT = design.colors.accent.hex;
+  }
   for (let i = 0; i < design.colors.neutrals.length && i < 10; i++) {
     config.colors[`neutral-${i * 100 || 50}`] = design.colors.neutrals[i].hex;
   }
@@ -58,6 +84,33 @@ export function formatTailwind(design) {
     if (bp.type === 'min-width') {
       config.screens[bp.label] = `${bp.value}px`;
     }
+  }
+
+  // Animations
+  if (design.animations) {
+    if (design.animations.durations.length > 0) {
+      config.transitionDuration = {};
+      for (const d of design.animations.durations) {
+        const ms = d.endsWith('ms') ? parseInt(d) : parseFloat(d) * 1000;
+        config.transitionDuration[`${ms}`] = d;
+      }
+    }
+    if (design.animations.easings.length > 0) {
+      config.transitionTimingFunction = {};
+      for (const e of design.animations.easings) {
+        const val = typeof e === 'object' ? e.value : e;
+        const name = val.startsWith('cubic-bezier') ? 'custom' : val.replace(/ease-?/g, '').replace(/-/g, '') || 'default';
+        config.transitionTimingFunction[name] = val;
+      }
+    }
+  }
+
+  // Container
+  if (design.layout && design.layout.containerWidths.length > 0) {
+    const maxW = design.layout.containerWidths[0].maxWidth;
+    const padding = design.layout.containerWidths[0].padding;
+    config.container = { center: true, padding: padding || '1rem' };
+    if (maxW) config.maxWidth = { container: maxW };
   }
 
   // Clean empty objects

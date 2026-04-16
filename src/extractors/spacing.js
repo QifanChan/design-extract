@@ -1,4 +1,33 @@
-import { parseCSSValue, clusterValues, detectScale } from '../utils.js';
+import { parseCSSValue, detectScale } from '../utils.js';
+
+function naturalBreakCluster(values) {
+  if (values.length <= 1) return values;
+  const sorted = [...values].sort((a, b) => a - b);
+  if (sorted.length <= 2) return sorted;
+
+  // Compute gaps between consecutive values
+  const gaps = [];
+  for (let i = 1; i < sorted.length; i++) {
+    gaps.push(sorted[i] - sorted[i - 1]);
+  }
+
+  // Find median gap
+  const sortedGaps = [...gaps].sort((a, b) => a - b);
+  const medianGap = sortedGaps[Math.floor(sortedGaps.length / 2)];
+
+  // Split into clusters at gaps larger than the median
+  const clusters = [[sorted[0]]];
+  for (let i = 1; i < sorted.length; i++) {
+    if (gaps[i - 1] > medianGap) {
+      clusters.push([sorted[i]]);
+    } else {
+      clusters[clusters.length - 1].push(sorted[i]);
+    }
+  }
+
+  // Use the first (smallest) value in each cluster as representative
+  return clusters.map(c => c[0]);
+}
 
 export function extractSpacing(computedStyles) {
   const allValues = new Set();
@@ -13,7 +42,7 @@ export function extractSpacing(computedStyles) {
   }
 
   const sorted = [...allValues].sort((a, b) => a - b);
-  const clustered = clusterValues(sorted, 2);
+  const clustered = naturalBreakCluster(sorted);
   const { base, scale } = detectScale(clustered);
 
   // Build named tokens

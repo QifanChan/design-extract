@@ -1,15 +1,33 @@
 export function extractComponents(computedStyles) {
   const components = {};
 
-  // Buttons
+  // Buttons — with variant detection
   const buttons = computedStyles.filter(el =>
     el.tag === 'button' || el.role === 'button' ||
     (el.tag === 'a' && /btn|button/i.test(el.classList))
   );
   if (buttons.length > 0) {
+    // Group by background color to detect variants
+    const bgGroups = new Map();
+    for (const btn of buttons) {
+      const bg = btn.backgroundColor || 'transparent';
+      if (!bgGroups.has(bg)) bgGroups.set(bg, []);
+      bgGroups.get(bg).push(btn);
+    }
+    const variants = [...bgGroups.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([bg, group], i) => {
+        let variant = 'default';
+        if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') variant = 'ghost';
+        else if (i === 0) variant = 'primary';
+        else if (i === 1) variant = 'secondary';
+        else variant = `variant-${i + 1}`;
+        return { variant, backgroundColor: bg, count: group.length, style: mostCommonStyle(group, ['color', 'fontSize', 'fontWeight', 'paddingTop', 'paddingRight', 'borderRadius']) };
+      });
     components.buttons = {
       count: buttons.length,
       baseStyle: mostCommonStyle(buttons, ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'paddingTop', 'paddingRight', 'borderRadius']),
+      variants,
     };
   }
 
@@ -128,6 +146,64 @@ export function extractComponents(computedStyles) {
     components.avatars = {
       count: avatars.length,
       baseStyle: mostCommonStyle(avatars, ['borderRadius', 'backgroundColor']),
+    };
+  }
+
+  // Tabs
+  const tabs = computedStyles.filter(el =>
+    el.role === 'tab' || /\btab\b/i.test(el.classList)
+  );
+  if (tabs.length > 0) {
+    components.tabs = {
+      count: tabs.length,
+      baseStyle: mostCommonStyle(tabs, ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'paddingTop', 'paddingRight', 'borderColor', 'borderRadius']),
+    };
+  }
+
+  // Accordions
+  const accordions = computedStyles.filter(el =>
+    /accordion/i.test(el.classList) ||
+    (el.tag === 'summary') ||
+    (el.tag === 'details')
+  );
+  if (accordions.length > 0) {
+    components.accordions = {
+      count: accordions.length,
+      baseStyle: mostCommonStyle(accordions, ['backgroundColor', 'color', 'fontSize', 'paddingTop', 'paddingRight', 'borderColor']),
+    };
+  }
+
+  // Tooltips
+  const tooltips = computedStyles.filter(el =>
+    el.role === 'tooltip' || /tooltip/i.test(el.classList)
+  );
+  if (tooltips.length > 0) {
+    components.tooltips = {
+      count: tooltips.length,
+      baseStyle: mostCommonStyle(tooltips, ['backgroundColor', 'color', 'fontSize', 'borderRadius', 'paddingTop', 'paddingRight', 'boxShadow']),
+    };
+  }
+
+  // Progress bars
+  const progressBars = computedStyles.filter(el =>
+    el.tag === 'progress' || el.role === 'progressbar' || /progress/i.test(el.classList)
+  );
+  if (progressBars.length > 0) {
+    components.progressBars = {
+      count: progressBars.length,
+      baseStyle: mostCommonStyle(progressBars, ['backgroundColor', 'color', 'borderRadius', 'fontSize']),
+    };
+  }
+
+  // Switches / Toggles
+  const switches = computedStyles.filter(el =>
+    el.role === 'switch' ||
+    /switch|toggle/i.test(el.classList)
+  );
+  if (switches.length > 0) {
+    components.switches = {
+      count: switches.length,
+      baseStyle: mostCommonStyle(switches, ['backgroundColor', 'borderRadius', 'borderColor']),
     };
   }
 

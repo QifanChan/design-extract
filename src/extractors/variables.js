@@ -18,5 +18,24 @@ export function extractVariables(cssVariables) {
     }
   }
 
-  return categories;
+  // Build dependency map: which variables reference other variables
+  const dependencies = {};
+  for (const [name, value] of Object.entries(cssVariables)) {
+    const refs = [...value.matchAll(/var\((--[\w-]+)/g)].map(m => m[1]);
+    if (refs.length > 0) {
+      dependencies[name] = refs;
+    }
+  }
+
+  // Semantic grouping by name patterns
+  const semantic = { success: {}, warning: {}, error: {}, info: {} };
+  for (const [name, value] of Object.entries(cssVariables)) {
+    const lower = name.toLowerCase();
+    if (/success|green|valid|positive/.test(lower)) semantic.success[name] = value;
+    else if (/warning|warn|yellow|caution|amber/.test(lower)) semantic.warning[name] = value;
+    else if (/error|danger|destructive|red|invalid|negative/.test(lower)) semantic.error[name] = value;
+    else if (/info|informati|blue|notice/.test(lower)) semantic.info[name] = value;
+  }
+
+  return { ...categories, dependencies, semantic };
 }

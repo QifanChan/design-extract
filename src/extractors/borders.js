@@ -1,14 +1,46 @@
 import { parseCSSValue, clusterValues } from '../utils.js';
 
+function parseBorderRadius(raw) {
+  if (!raw || raw === '0px') return [];
+  // Handle slash-separated (x/y) syntax — take the x part
+  const parts = raw.split('/')[0].trim().split(/\s+/);
+  const values = [];
+  for (const p of parts) {
+    const v = parseCSSValue(p);
+    if (v && v.value > 0) values.push(Math.round(v.value));
+  }
+  return values;
+}
+
 export function extractBorders(computedStyles) {
   const radiiSet = new Map(); // value -> count
+  const widthSet = new Set();
+  const styleSet = new Set();
 
   for (const el of computedStyles) {
     if (el.borderRadius && el.borderRadius !== '0px') {
-      const val = parseCSSValue(el.borderRadius.split(' ')[0]);
-      if (val && val.value > 0) {
-        const px = Math.round(val.value);
-        radiiSet.set(px, (radiiSet.get(px) || 0) + 1);
+      const values = parseBorderRadius(el.borderRadius);
+      if (values.length > 0) {
+        // Use the max value from the shorthand as the representative
+        const representative = Math.max(...values);
+        radiiSet.set(representative, (radiiSet.get(representative) || 0) + 1);
+      }
+    }
+
+    // Collect border widths
+    if (el.borderWidth) {
+      const parts = el.borderWidth.split(/\s+/);
+      for (const p of parts) {
+        const v = parseCSSValue(p);
+        if (v && v.value > 0) widthSet.add(Math.round(v.value));
+      }
+    }
+
+    // Collect border styles
+    if (el.borderStyle) {
+      const parts = el.borderStyle.split(/\s+/);
+      for (const p of parts) {
+        if (p && p !== 'none' && p !== 'initial') styleSet.add(p);
       }
     }
   }
@@ -27,5 +59,8 @@ export function extractBorders(computedStyles) {
     return { value: v, label, count: radiiSet.get(v) || 0 };
   });
 
-  return { radii };
+  const widths = [...widthSet].sort((a, b) => a - b);
+  const styles = [...styleSet].sort();
+
+  return { radii, widths, styles };
 }

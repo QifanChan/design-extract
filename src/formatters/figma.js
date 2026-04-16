@@ -1,76 +1,95 @@
 // Figma Variables JSON format (compatible with Figma Variables import)
 export function formatFigma(design) {
-  const variables = [];
+  const collections = [];
 
-  // Colors
+  // --- Brand collection (colors with light/dark modes) ---
+  const brandVars = [];
+  const hasDarkMode = !!design.darkMode;
+  const brandModes = hasDarkMode ? ['light', 'dark'] : ['light'];
+
+  // Brand colors
   if (design.colors.primary) {
-    variables.push(colorVar('color/primary', design.colors.primary.hex));
+    const v = { name: 'color/primary', type: 'COLOR', values: { light: colorVal(design.colors.primary.hex) } };
+    if (hasDarkMode && design.darkMode.colors.primary) v.values.dark = colorVal(design.darkMode.colors.primary.hex);
+    else if (hasDarkMode) v.values.dark = v.values.light;
+    brandVars.push(v);
   }
   if (design.colors.secondary) {
-    variables.push(colorVar('color/secondary', design.colors.secondary.hex));
+    const v = { name: 'color/secondary', type: 'COLOR', values: { light: colorVal(design.colors.secondary.hex) } };
+    if (hasDarkMode && design.darkMode.colors.secondary) v.values.dark = colorVal(design.darkMode.colors.secondary.hex);
+    else if (hasDarkMode) v.values.dark = v.values.light;
+    brandVars.push(v);
   }
   if (design.colors.accent) {
-    variables.push(colorVar('color/accent', design.colors.accent.hex));
+    const v = { name: 'color/accent', type: 'COLOR', values: { light: colorVal(design.colors.accent.hex) } };
+    if (hasDarkMode && design.darkMode.colors.accent) v.values.dark = v.values.light;
+    brandVars.push(v);
   }
+
+  // Neutrals
   for (let i = 0; i < design.colors.neutrals.length && i < 10; i++) {
-    variables.push(colorVar(`color/neutral/${i * 100 || 50}`, design.colors.neutrals[i].hex));
+    const label = i * 100 || 50;
+    const v = { name: `color/neutral/${label}`, type: 'COLOR', values: { light: colorVal(design.colors.neutrals[i].hex) } };
+    if (hasDarkMode && design.darkMode.colors.neutrals[i]) v.values.dark = colorVal(design.darkMode.colors.neutrals[i].hex);
+    else if (hasDarkMode) v.values.dark = v.values.light;
+    brandVars.push(v);
   }
+
+  // Semantic colors (backgrounds, text)
   for (let i = 0; i < design.colors.backgrounds.length; i++) {
-    variables.push(colorVar(`color/background/${i === 0 ? 'default' : i}`, design.colors.backgrounds[i]));
+    const label = i === 0 ? 'default' : `${i}`;
+    const v = { name: `color/background/${label}`, type: 'COLOR', values: { light: colorVal(design.colors.backgrounds[i]) } };
+    if (hasDarkMode && design.darkMode.colors.backgrounds[i]) v.values.dark = colorVal(design.darkMode.colors.backgrounds[i]);
+    else if (hasDarkMode) v.values.dark = v.values.light;
+    brandVars.push(v);
   }
   for (let i = 0; i < design.colors.text.length && i < 5; i++) {
-    variables.push(colorVar(`color/text/${i === 0 ? 'default' : i}`, design.colors.text[i]));
+    const label = i === 0 ? 'default' : `${i}`;
+    const v = { name: `color/text/${label}`, type: 'COLOR', values: { light: colorVal(design.colors.text[i]) } };
+    if (hasDarkMode && design.darkMode.colors.text[i]) v.values.dark = colorVal(design.darkMode.colors.text[i]);
+    else if (hasDarkMode) v.values.dark = v.values.light;
+    brandVars.push(v);
   }
 
-  // Spacing
+  collections.push({ name: 'Brand', modes: brandModes, variables: brandVars });
+
+  // --- Typography collection ---
+  const typoVars = [];
+  for (const s of design.typography.scale.slice(0, 12)) {
+    typoVars.push({ name: `font/size/${s.size}`, type: 'FLOAT', values: { default: s.size } });
+    if (s.weight) {
+      typoVars.push({ name: `font/weight/${s.size}`, type: 'FLOAT', values: { default: parseInt(s.weight) || 400 } });
+    }
+    if (s.lineHeight && s.lineHeight !== 'normal') {
+      const lh = parseFloat(s.lineHeight);
+      if (!isNaN(lh)) {
+        typoVars.push({ name: `font/lineHeight/${s.size}`, type: 'FLOAT', values: { default: lh } });
+      }
+    }
+  }
+  if (typoVars.length > 0) {
+    collections.push({ name: 'Typography', modes: ['default'], variables: typoVars });
+  }
+
+  // --- Spacing collection ---
+  const spacingVars = [];
   for (const v of design.spacing.scale.slice(0, 20)) {
-    variables.push({ name: `spacing/${v}`, type: 'FLOAT', value: v, scopes: ['GAP', 'ALL_SCOPES'] });
+    spacingVars.push({ name: `spacing/${v}`, type: 'FLOAT', values: { default: v } });
   }
-
   // Border radius
   for (const r of design.borders.radii) {
-    variables.push({ name: `radius/${r.label}`, type: 'FLOAT', value: r.value, scopes: ['CORNER_RADIUS'] });
+    spacingVars.push({ name: `radius/${r.label}`, type: 'FLOAT', values: { default: r.value } });
+  }
+  if (spacingVars.length > 0) {
+    collections.push({ name: 'Spacing', modes: ['default'], variables: spacingVars });
   }
 
-  // Font sizes
-  for (const s of design.typography.scale.slice(0, 12)) {
-    variables.push({ name: `fontSize/${s.size}`, type: 'FLOAT', value: s.size, scopes: ['FONT_SIZE'] });
-  }
-
-  const collection = {
-    name: `Design Language — ${design.meta.title || 'Extracted'}`,
-    modes: [{ name: 'Default', variables }],
-  };
-
-  // Add dark mode if available
-  if (design.darkMode) {
-    const darkVars = [];
-    const dc = design.darkMode.colors;
-    if (dc.primary) darkVars.push(colorVar('color/primary', dc.primary.hex));
-    if (dc.secondary) darkVars.push(colorVar('color/secondary', dc.secondary.hex));
-    for (let i = 0; i < dc.neutrals.length && i < 10; i++) {
-      darkVars.push(colorVar(`color/neutral/${i * 100 || 50}`, dc.neutrals[i].hex));
-    }
-    for (let i = 0; i < dc.backgrounds.length; i++) {
-      darkVars.push(colorVar(`color/background/${i === 0 ? 'default' : i}`, dc.backgrounds[i]));
-    }
-    for (let i = 0; i < dc.text.length && i < 5; i++) {
-      darkVars.push(colorVar(`color/text/${i === 0 ? 'default' : i}`, dc.text[i]));
-    }
-    collection.modes.push({ name: 'Dark', variables: darkVars });
-  }
-
-  return JSON.stringify(collection, null, 2);
+  return JSON.stringify({ collections }, null, 2);
 }
 
-function colorVar(name, hex) {
+function colorVal(hex) {
   const rgb = hexToRgb(hex);
-  return {
-    name,
-    type: 'COLOR',
-    value: { r: rgb.r / 255, g: rgb.g / 255, b: rgb.b / 255, a: 1 },
-    scopes: ['ALL_SCOPES'],
-  };
+  return { r: rgb.r / 255, g: rgb.g / 255, b: rgb.b / 255, a: 1 };
 }
 
 function hexToRgb(hex) {

@@ -20,6 +20,29 @@ const NAMED_COLORS = {
   maroon: { r: 128, g: 0, b: 0, a: 1 },
 };
 
+function oklabToRgb(L, a, b) {
+  // OKLab -> linear sRGB
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+  const l = l_ * l_ * l_;
+  const m = m_ * m_ * m_;
+  const s = s_ * s_ * s_;
+  let r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+  let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+  let bl = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+  // Clamp to [0,255]
+  const clamp = v => Math.round(Math.max(0, Math.min(1, v)) * 255);
+  return { r: clamp(r), g: clamp(g), b: clamp(bl) };
+}
+
+function oklchToRgb(L, C, H) {
+  const hRad = H * Math.PI / 180;
+  const a = C * Math.cos(hRad);
+  const b = C * Math.sin(hRad);
+  return oklabToRgb(L, a, b);
+}
+
 export function parseColor(str) {
   if (!str || str === 'none' || str === 'currentcolor' || str === 'inherit' || str === 'initial') return null;
   str = str.trim().toLowerCase();
@@ -56,6 +79,51 @@ export function parseColor(str) {
   if (hslMatch) {
     const rgb = hslToRgb(+hslMatch[1], +hslMatch[2], +hslMatch[3]);
     return { ...rgb, a: hslMatch[4] !== undefined ? +hslMatch[4] : 1 };
+  }
+
+  // hsl modern: hsl(210 50% 40%) or hsl(210 50% 40% / 0.5)
+  const hslModern = str.match(/hsla?\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*(?:\/\s*([\d.]+%?))?\s*\)/);
+  if (hslModern) {
+    const rgb = hslToRgb(+hslModern[1], +hslModern[2], +hslModern[3]);
+    let a = 1;
+    if (hslModern[4] !== undefined) {
+      a = hslModern[4].endsWith('%') ? parseFloat(hslModern[4]) / 100 : +hslModern[4];
+    }
+    return { ...rgb, a };
+  }
+
+  // oklch(L C H) or oklch(L C H / a)
+  const oklchMatch = str.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+%?))?\s*\)/);
+  if (oklchMatch) {
+    const rgb = oklchToRgb(+oklchMatch[1], +oklchMatch[2], +oklchMatch[3]);
+    let a = 1;
+    if (oklchMatch[4] !== undefined) {
+      a = oklchMatch[4].endsWith('%') ? parseFloat(oklchMatch[4]) / 100 : +oklchMatch[4];
+    }
+    return { ...rgb, a };
+  }
+
+  // oklab(L a b) or oklab(L a b / alpha)
+  const oklabMatch = str.match(/oklab\(\s*([\d.e+-]+)\s+([\d.e+-]+)\s+([\d.e+-]+)\s*(?:\/\s*([\d.]+%?))?\s*\)/);
+  if (oklabMatch) {
+    const rgb = oklabToRgb(+oklabMatch[1], +oklabMatch[2], +oklabMatch[3]);
+    let a = 1;
+    if (oklabMatch[4] !== undefined) {
+      a = oklabMatch[4].endsWith('%') ? parseFloat(oklabMatch[4]) / 100 : +oklabMatch[4];
+    }
+    return { ...rgb, a };
+  }
+
+  // color-mix(in srgb, color1 pct, color2)
+  const mixMatch = str.match(/color-mix\(\s*in\s+\w+\s*,\s*(.+?)\s*,\s*(.+?)\s*\)/);
+  if (mixMatch) {
+    const part1 = mixMatch[1].trim().replace(/\s+\d+%$/, '');
+    const part2 = mixMatch[2].trim().replace(/\s+\d+%$/, '');
+    const c1 = parseColor(part1);
+    const c2 = parseColor(part2);
+    if (c1 && c2) {
+      return { r: Math.round((c1.r + c2.r) / 2), g: Math.round((c1.g + c2.g) / 2), b: Math.round((c1.b + c2.b) / 2), a: (c1.a + c2.a) / 2 };
+    }
   }
 
   return null;

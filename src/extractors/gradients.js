@@ -6,7 +6,9 @@ export function extractGradients(styles) {
     const bg = el.backgroundImage;
     if (!bg || !bg.includes('gradient')) continue;
     const rawGradients = splitGradients(bg);
-    for (const raw of rawGradients) {
+    for (let raw of rawGradients) {
+      // Normalize vendor prefixes
+      raw = raw.replace(/-(webkit|moz)-/g, '');
       if (seen.has(raw)) continue;
       seen.add(raw);
       gradients.push(parseGradient(raw));
@@ -58,15 +60,33 @@ function parseGradient(raw) {
   let direction = null;
   let stopArgs = args;
   const first = args[0] || '';
-  if (/^(to |from |\d+deg|at )/.test(first) || /^(circle|ellipse)/.test(first)) {
+  if (/^(to |from |\d+(\.\d+)?(deg|grad|rad|turn)|at )/.test(first) || /^(circle|ellipse)/.test(first)) {
     direction = first;
     stopArgs = args.slice(1);
   }
 
   const stops = stopArgs.map(s => {
-    const posMatch = s.match(/([\d.]+%?)$/);
-    const position = posMatch ? posMatch[1] : null;
-    const color = position ? s.slice(0, posMatch.index).trim() : s.trim();
+    // Match position only if it's outside parentheses (not inside rgb/hsl)
+    // Position is a percentage or length at the end, after the color value
+    const trimmed = s.trim();
+    // Check if trailing value is outside any parens
+    const lastParen = trimmed.lastIndexOf(')');
+    const trailing = lastParen >= 0 ? trimmed.slice(lastParen + 1).trim() : trimmed;
+    const posMatch = trailing.match(/([\d.]+(%|px|em|rem|vw|vh)?)$/);
+    let position = null;
+    let color = trimmed;
+    if (posMatch && posMatch[0] !== trimmed) {
+      // Position found after the color function closes
+      position = posMatch[0];
+      color = trimmed.slice(0, trimmed.length - trailing.length + trailing.indexOf(posMatch[0])).trim();
+    } else if (lastParen < 0) {
+      // No parens — simple color like "red 50%"
+      const simplePos = trimmed.match(/\s+([\d.]+(%|px|em|rem|vw|vh)?)$/);
+      if (simplePos) {
+        position = simplePos[1];
+        color = trimmed.slice(0, simplePos.index).trim();
+      }
+    }
     return { color, position };
   });
 

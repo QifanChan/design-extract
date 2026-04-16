@@ -17,9 +17,17 @@ import { extractIcons } from './extractors/icons.js';
 import { extractFonts } from './extractors/fonts.js';
 import { extractImageStyles } from './extractors/images.js';
 
+function safeExtract(fn, ...args) {
+  try { return fn(...args); } catch { return null; }
+}
+
 export async function extractDesignLanguage(url, options = {}) {
-  const rawData = await crawlPage(url, options);
+  const rawData = await crawlPage(url, {
+    ...options,
+    ignore: options.ignore,
+  });
   const styles = rawData.light.computedStyles;
+  const warnings = [];
 
   const design = {
     meta: {
@@ -29,34 +37,48 @@ export async function extractDesignLanguage(url, options = {}) {
       elementCount: styles.length,
       pagesAnalyzed: rawData.pagesAnalyzed || 1,
     },
-    colors: extractColors(styles),
-    typography: extractTypography(styles),
-    spacing: extractSpacing(styles),
-    shadows: extractShadows(styles),
-    borders: extractBorders(styles),
-    variables: extractVariables(rawData.light.cssVariables),
-    breakpoints: extractBreakpoints(rawData.light.mediaQueries),
-    animations: extractAnimations(styles, rawData.light.keyframes),
-    components: extractComponents(styles),
-    accessibility: extractAccessibility(styles),
-    layout: extractLayout(styles),
-    gradients: extractGradients(styles),
-    zIndex: extractZIndex(styles),
-    icons: rawData.light.icons ? extractIcons(rawData.light.icons) : { icons: [], count: 0 },
-    fonts: rawData.light.fontData ? extractFonts(rawData.light.fontData) : { fonts: [], systemFonts: [] },
-    images: rawData.light.images ? extractImageStyles(rawData.light.images) : { patterns: [], aspectRatios: [] },
+    colors: safeExtract(extractColors, styles) || { primary: null, secondary: null, accent: null, neutrals: [], backgrounds: [], text: [], gradients: [], all: [] },
+    typography: safeExtract(extractTypography, styles) || { families: [], scale: [] },
+    spacing: safeExtract(extractSpacing, styles) || { scale: [], base: null },
+    shadows: safeExtract(extractShadows, styles) || { values: [] },
+    borders: safeExtract(extractBorders, styles) || { radii: [] },
+    variables: safeExtract(extractVariables, rawData.light.cssVariables) || {},
+    breakpoints: safeExtract(extractBreakpoints, rawData.light.mediaQueries) || [],
+    animations: safeExtract(extractAnimations, styles, rawData.light.keyframes) || { transitions: [], keyframes: [] },
+    components: safeExtract(extractComponents, styles) || {},
+    accessibility: safeExtract(extractAccessibility, styles) || { score: 0, failCount: 0 },
+    layout: safeExtract(extractLayout, styles) || { gridCount: 0, flexCount: 0 },
+    gradients: safeExtract(extractGradients, styles) || { count: 0 },
+    zIndex: safeExtract(extractZIndex, styles) || { allValues: [], issues: [] },
+    icons: rawData.light.icons ? (safeExtract(extractIcons, rawData.light.icons) || { icons: [], count: 0 }) : { icons: [], count: 0 },
+    fonts: rawData.light.fontData ? (safeExtract(extractFonts, rawData.light.fontData) || { fonts: [], systemFonts: [] }) : { fonts: [], systemFonts: [] },
+    images: rawData.light.images ? (safeExtract(extractImageStyles, rawData.light.images) || { patterns: [], aspectRatios: [] }) : { patterns: [], aspectRatios: [] },
     componentScreenshots: rawData.componentScreenshots || {},
     score: null,
   };
 
+  // Track which extractors failed
+  const extractorChecks = [
+    ['colors', design.colors], ['typography', design.typography], ['spacing', design.spacing],
+    ['shadows', design.shadows], ['borders', design.borders], ['variables', design.variables],
+    ['breakpoints', design.breakpoints], ['animations', design.animations], ['components', design.components],
+    ['accessibility', design.accessibility], ['layout', design.layout], ['gradients', design.gradients],
+    ['zIndex', design.zIndex],
+  ];
+  for (const [name, result] of extractorChecks) {
+    if (result === null) warnings.push(`${name} extractor failed`);
+  }
+  design.warnings = warnings;
+
   if (rawData.dark) {
     design.darkMode = {
-      colors: extractColors(rawData.dark.computedStyles),
-      variables: extractVariables(rawData.dark.cssVariables),
+      colors: safeExtract(extractColors, rawData.dark.computedStyles) || { primary: null, secondary: null, accent: null, neutrals: [], backgrounds: [], text: [], gradients: [], all: [] },
+      variables: safeExtract(extractVariables, rawData.dark.cssVariables) || {},
     };
   }
 
-  design.score = scoreDesignSystem(design);
+  design.score = safeExtract(scoreDesignSystem, design);
+  if (design.score === null) warnings.push('scoring failed');
 
   return design;
 }
@@ -69,6 +91,9 @@ export { formatCssVars } from './formatters/css-vars.js';
 export { formatPreview } from './formatters/preview.js';
 export { formatFigma } from './formatters/figma.js';
 export { formatReactTheme, formatShadcnTheme } from './formatters/theme.js';
+export { formatWordPress } from './formatters/wordpress.js';
+export { formatVueTheme } from './formatters/vue-theme.js';
+export { formatSvelteTheme } from './formatters/svelte-theme.js';
 export { diffDesigns, formatDiffMarkdown, formatDiffHtml } from './diff.js';
 export { saveSnapshot, getHistory, formatHistoryMarkdown } from './history.js';
 export { captureResponsive } from './extractors/responsive.js';
@@ -80,3 +105,4 @@ export { scoreDesignSystem } from './extractors/scoring.js';
 export { watchSite } from './watch.js';
 export { diffDarkMode } from './darkdiff.js';
 export { applyDesign } from './apply.js';
+export { loadConfig, mergeConfig } from './config.js';

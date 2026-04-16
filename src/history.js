@@ -2,8 +2,9 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
 
-const HISTORY_DIR = join(process.env.HOME || process.env.USERPROFILE || '.', '.designlang');
+const HISTORY_DIR = join(homedir(), '.designlang');
 
 function ensureDir() {
   mkdirSync(HISTORY_DIR, { recursive: true });
@@ -50,6 +51,12 @@ export function saveSnapshot(design) {
   };
 
   history.push(snapshot);
+
+  // Prune oldest entries if history exceeds 50 snapshots
+  if (history.length > 50) {
+    history = history.slice(history.length - 50);
+  }
+
   writeFileSync(file, JSON.stringify(history, null, 2), 'utf-8');
   return { hostname, snapshotCount: history.length, file };
 }

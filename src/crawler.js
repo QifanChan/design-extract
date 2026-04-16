@@ -4,107 +4,121 @@ import { join } from 'path';
 
 const MAX_ELEMENTS = 5000;
 
+async function gotoWithRetry(page, url, opts, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await page.goto(url, opts);
+      return;
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      await page.waitForTimeout(2000 * (i + 1));
+    }
+  }
+}
+
 export async function crawlPage(url, options = {}) {
-  const { width = 1280, height = 800, wait = 0, dark = false, depth = 0, screenshots = false, outDir = '', executablePath, browserArgs, cookies, headers } = options;
+  const { width = 1280, height = 800, wait = 0, dark = false, depth = 0, screenshots = false, outDir = '', executablePath, browserArgs, cookies, headers, ignore } = options;
 
   const browser = await chromium.launch({
     headless: true,
     ...(executablePath && { executablePath }),
     ...(browserArgs && { args: browserArgs }),
   });
-  const context = await browser.newContext({
-    viewport: { width, height },
-    colorScheme: 'light',
-    ...(headers && { extraHTTPHeaders: headers }),
-  });
-
-  // Set cookies if provided
-  if (cookies && cookies.length > 0) {
-    await context.addCookies(cookies.map(c => {
-      if (typeof c === 'string') {
-        const [name, ...rest] = c.split('=');
-        return { name, value: rest.join('='), url };
-      }
-      return c;
-    }));
-  }
-  const page = await context.newPage();
-
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  // Wait for network to settle — but don't hang on sites with persistent connections
-  await page.waitForLoadState('networkidle').catch(() => {});
-  if (wait > 0) await page.waitForTimeout(wait);
-  await page.evaluate(() => document.fonts.ready).catch(() => {});
-
-  const title = await page.title();
-  const lightData = await extractPageData(page);
-
-  // Component screenshots
-  let componentScreenshots = {};
-  if (screenshots && outDir) {
-    componentScreenshots = await captureComponentScreenshots(page, outDir);
-  }
-
-  // Multi-page crawl: discover internal links and extract from them
-  let additionalPages = [];
-  if (depth > 0) {
-    const internalLinks = await discoverInternalLinks(page, url, depth);
-    for (const link of internalLinks) {
-      try {
-        await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 20000 });
-        await page.waitForLoadState('networkidle').catch(() => {});
-        await page.evaluate(() => document.fonts.ready).catch(() => {});
-        const pageData = await extractPageData(page);
-        additionalPages.push({ url: link, data: pageData });
-      } catch { /* skip failed pages */ }
-    }
-  }
-
-  // Dark mode extraction
-  let darkData = null;
-  if (dark) {
-    await context.close();
-    const darkContext = await browser.newContext({
+  try {
+    const context = await browser.newContext({
       viewport: { width, height },
-      colorScheme: 'dark',
+      colorScheme: 'light',
+      ...(headers && { extraHTTPHeaders: headers }),
     });
-    const darkPage = await darkContext.newPage();
-    await darkPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await darkPage.waitForLoadState('networkidle').catch(() => {});
-    await darkPage.evaluate(() => document.fonts.ready).catch(() => {});
-    darkData = await extractPageData(darkPage);
-    await darkContext.close();
-  } else {
-    await context.close();
-  }
 
-  await browser.close();
-
-  // Merge additional page data into light data
-  if (additionalPages.length > 0) {
-    lightData.computedStyles = mergeStyles(lightData.computedStyles, additionalPages);
-    for (const ap of additionalPages) {
-      Object.assign(lightData.cssVariables, ap.data.cssVariables);
-      lightData.mediaQueries.push(...ap.data.mediaQueries);
-      lightData.keyframes.push(...ap.data.keyframes);
+    // Set cookies if provided
+    if (cookies && cookies.length > 0) {
+      await context.addCookies(cookies.map(c => {
+        if (typeof c === 'string') {
+          const [name, ...rest] = c.split('=');
+          return { name, value: rest.join('='), url };
+        }
+        return c;
+      }));
     }
-    // Deduplicate media queries and keyframes
-    lightData.mediaQueries = [...new Set(lightData.mediaQueries)];
-    const seenKf = new Set();
-    lightData.keyframes = lightData.keyframes.filter(kf => {
-      if (seenKf.has(kf.name)) return false;
-      seenKf.add(kf.name);
-      return true;
-    });
-  }
+    const page = await context.newPage();
 
-  return {
-    url, title,
-    light: lightData,
-    dark: darkData,
-    pagesAnalyzed: 1 + additionalPages.length,
-    componentScreenshots,
-  };
+    await gotoWithRetry(page, url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Wait for network to settle — but don't hang on sites with persistent connections
+    await page.waitForLoadState('networkidle').catch(() => {});
+    if (wait > 0) await page.waitForTimeout(wait);
+    await page.evaluate(() => document.fonts.ready).catch(() => {});
+
+    const title = await page.title();
+    const lightData = await extractPageData(page, ignore);
+
+    // Component screenshots
+    let componentScreenshots = {};
+    if (screenshots && outDir) {
+      componentScreenshots = await captureComponentScreenshots(page, outDir);
+    }
+
+    // Multi-page crawl: discover internal links and extract from them
+    let additionalPages = [];
+    if (depth > 0) {
+      const internalLinks = await discoverInternalLinks(page, url, depth);
+      for (const link of internalLinks) {
+        try {
+          await gotoWithRetry(page, link, { waitUntil: 'domcontentloaded', timeout: 20000 });
+          await page.waitForLoadState('networkidle').catch(() => {});
+          await page.evaluate(() => document.fonts.ready).catch(() => {});
+          const pageData = await extractPageData(page);
+          additionalPages.push({ url: link, data: pageData });
+        } catch { /* skip failed pages */ }
+      }
+    }
+
+    // Dark mode extraction
+    let darkData = null;
+    if (dark) {
+      await context.close();
+      const darkContext = await browser.newContext({
+        viewport: { width, height },
+        colorScheme: 'dark',
+      });
+      const darkPage = await darkContext.newPage();
+      await gotoWithRetry(darkPage, url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await darkPage.waitForLoadState('networkidle').catch(() => {});
+      await darkPage.evaluate(() => document.fonts.ready).catch(() => {});
+      darkData = await extractPageData(darkPage);
+      await darkContext.close();
+    } else {
+      await context.close();
+    }
+
+    // Merge additional page data into light data
+    if (additionalPages.length > 0) {
+      lightData.computedStyles = mergeStyles(lightData.computedStyles, additionalPages);
+      for (const ap of additionalPages) {
+        Object.assign(lightData.cssVariables, ap.data.cssVariables);
+        lightData.mediaQueries.push(...ap.data.mediaQueries);
+        lightData.keyframes.push(...ap.data.keyframes);
+      }
+      // Deduplicate media queries and keyframes
+      lightData.mediaQueries = [...new Set(lightData.mediaQueries)];
+      const seenKf = new Set();
+      lightData.keyframes = lightData.keyframes.filter(kf => {
+        if (seenKf.has(kf.name)) return false;
+        seenKf.add(kf.name);
+        return true;
+      });
+    }
+
+    return {
+      url, title,
+      light: lightData,
+      dark: darkData,
+      pagesAnalyzed: 1 + additionalPages.length,
+      componentScreenshots,
+    };
+  } finally {
+    await browser.close();
+  }
 }
 
 function mergeStyles(primary, additionalPages) {
@@ -174,19 +188,39 @@ export async function captureComponentScreenshots(page, outDir) {
   return result;
 }
 
-async function extractPageData(page) {
-  return page.evaluate((maxElements) => {
+async function extractPageData(page, ignoreSelectors) {
+  const data = await page.evaluate(({ maxElements, ignoreSelectors }) => {
+    // Remove ignored elements before extraction
+    if (ignoreSelectors && ignoreSelectors.length > 0) {
+      for (const sel of ignoreSelectors) {
+        try {
+          for (const el of document.querySelectorAll(sel)) {
+            el.remove();
+          }
+        } catch { /* invalid selector */ }
+      }
+    }
+
     const results = {
       computedStyles: [],
       cssVariables: {},
       mediaQueries: [],
       keyframes: [],
+      crossOriginSheets: [],
     };
 
-    const allElements = document.querySelectorAll('*');
-    const elements = allElements.length > maxElements
-      ? Array.from(allElements).slice(0, maxElements)
-      : Array.from(allElements);
+    // Collect elements including shadow DOM contents
+    function collectElements(root, collected) {
+      for (const el of root.querySelectorAll('*')) {
+        if (collected.length >= maxElements) break;
+        collected.push(el);
+        if (el.shadowRoot) {
+          collectElements(el.shadowRoot, collected);
+        }
+      }
+      return collected;
+    }
+    const elements = collectElements(document, []);
 
     for (const el of elements) {
       const cs = getComputedStyle(el);
@@ -217,7 +251,10 @@ async function extractPageData(page) {
         marginLeft: cs.marginLeft,
         gap: cs.gap,
         borderRadius: cs.borderRadius,
+        borderWidth: cs.borderWidth,
+        borderStyle: cs.borderStyle,
         boxShadow: cs.boxShadow,
+        textShadow: cs.textShadow,
         zIndex: cs.zIndex,
         transition: cs.transition,
         animation: cs.animation,
@@ -248,7 +285,7 @@ async function extractPageData(page) {
               }
             }
           }
-        } catch { /* cross-origin */ }
+        } catch { if (sheet.href) results.crossOriginSheets.push(sheet.href); }
       }
     } catch { /* no access */ }
 
@@ -268,7 +305,7 @@ async function extractPageData(page) {
               results.mediaQueries.push(rule.conditionText || rule.media.mediaText);
             }
           }
-        } catch { /* cross-origin */ }
+        } catch { /* cross-origin — already tracked */ }
       }
     } catch { /* no access */ }
 
@@ -285,7 +322,7 @@ async function extractPageData(page) {
               results.keyframes.push({ name: rule.name, steps });
             }
           }
-        } catch { /* cross-origin */ }
+        } catch { /* cross-origin — already tracked */ }
       }
     } catch { /* no access */ }
 
@@ -321,7 +358,7 @@ async function extractPageData(page) {
               });
             }
           }
-        } catch { /* cross-origin */ }
+        } catch { /* cross-origin — already tracked */ }
       }
     } catch {}
     for (const link of document.querySelectorAll('link[href*="fonts.googleapis.com"]')) {
@@ -353,5 +390,54 @@ async function extractPageData(page) {
     }
 
     return results;
-  }, MAX_ELEMENTS);
+  }, { maxElements: MAX_ELEMENTS, ignoreSelectors: ignoreSelectors || [] });
+
+  // Fetch and parse cross-origin stylesheets
+  if (data.crossOriginSheets && data.crossOriginSheets.length > 0) {
+    const seen = new Set();
+    for (const href of data.crossOriginSheets) {
+      if (seen.has(href)) continue;
+      seen.add(href);
+      try {
+        const cssText = await page.evaluate(async (url) => {
+          const res = await fetch(url, { mode: 'cors' });
+          return res.text();
+        }, href);
+        parseCrossOriginCSS(cssText, data);
+      } catch { /* fetch failed too */ }
+    }
+  }
+  delete data.crossOriginSheets;
+
+  return data;
+}
+
+function parseCrossOriginCSS(cssText, data) {
+  // Media queries
+  for (const m of cssText.matchAll(/@media\s*([^{]+)\{/g)) {
+    data.mediaQueries.push(m[1].trim());
+  }
+  // Keyframes
+  for (const m of cssText.matchAll(/@keyframes\s+([\w-]+)\s*\{([\s\S]*?)\n\}/g)) {
+    const steps = [];
+    for (const s of m[2].matchAll(/([\d%,\s]+|from|to)\s*\{([^}]*)\}/g)) {
+      steps.push({ offset: s[1].trim(), style: s[2].trim() });
+    }
+    if (steps.length > 0) data.keyframes.push({ name: m[1], steps });
+  }
+  // :root variables
+  for (const rootBlock of cssText.matchAll(/:root\s*\{([^}]+)\}/g)) {
+    for (const v of rootBlock[1].matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
+      if (!data.cssVariables[v[1]]) data.cssVariables[v[1]] = v[2].trim();
+    }
+  }
+  // @font-face
+  for (const m of cssText.matchAll(/@font-face\s*\{([^}]+)\}/g)) {
+    const block = m[1];
+    const family = block.match(/font-family\s*:\s*['"]?([^'";]+)/)?.[1]?.trim();
+    const style = block.match(/font-style\s*:\s*([^;]+)/)?.[1]?.trim() || 'normal';
+    const weight = block.match(/font-weight\s*:\s*([^;]+)/)?.[1]?.trim() || '400';
+    const src = block.match(/src\s*:\s*([^;]+)/)?.[1]?.trim() || '';
+    if (family) data.fontData.fontFaces.push({ family, style, weight, src });
+  }
 }

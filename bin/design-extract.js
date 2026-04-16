@@ -13,6 +13,10 @@ import { formatCssVars } from '../src/formatters/css-vars.js';
 import { formatPreview } from '../src/formatters/preview.js';
 import { formatFigma } from '../src/formatters/figma.js';
 import { formatReactTheme, formatShadcnTheme } from '../src/formatters/theme.js';
+import { formatWordPress } from '../src/formatters/wordpress.js';
+import { formatVueTheme } from '../src/formatters/vue-theme.js';
+import { formatSvelteTheme } from '../src/formatters/svelte-theme.js';
+import { loadConfig, mergeConfig } from '../src/config.js';
 import { diffDesigns, formatDiffMarkdown, formatDiffHtml } from '../src/diff.js';
 import { saveSnapshot, getHistory, formatHistoryMarkdown } from '../src/history.js';
 import { captureResponsive } from '../src/extractors/responsive.js';
@@ -25,12 +29,20 @@ import { diffDarkMode } from '../src/darkdiff.js';
 import { applyDesign } from '../src/apply.js';
 import { nameFromUrl } from '../src/utils.js';
 
+function validateUrl(url) {
+  try { new URL(url); } catch {
+    console.error(chalk.red(`\n  Invalid URL: ${url}\n`));
+    console.error(chalk.gray('  Example: designlang https://example.com\n'));
+    process.exit(1);
+  }
+}
+
 const program = new Command();
 
 program
   .name('designlang')
   .description('Extract the complete design language from any website')
-  .version('5.0.0');
+  .version('6.0.0');
 
 // ── Main command: extract ──────────────────────────────────────
 program
@@ -43,60 +55,97 @@ program
   .option('--dark', 'also extract dark mode styles')
   .option('--depth <n>', 'number of internal pages to also crawl', parseInt, 0)
   .option('--screenshots', 'capture component screenshots')
-  .option('--framework <type>', 'generate framework theme (react, shadcn)')
+  .option('--framework <type>', 'generate framework theme (react, shadcn, vue, svelte)')
   .option('--responsive', 'capture design at multiple breakpoints')
   .option('--interactions', 'capture hover/focus/active states')
   .option('--full', 'enable all extra captures (screenshots, responsive, interactions)')
   .option('--cookie <cookies...>', 'cookies for authenticated pages (name=value)')
   .option('--header <headers...>', 'custom headers (name:value)')
+  .option('--ignore <selectors...>', 'CSS selectors to remove before extraction')
+  .option('--json', 'output raw JSON to stdout (for CI/CD)')
+  .option('--json-pretty', 'output formatted JSON to stdout')
   .option('--no-history', 'skip saving to history')
   .option('--verbose', 'show detailed progress')
+  .option('-q, --quiet', 'suppress output except file paths')
   .action(async (url, opts) => {
     if (!url.startsWith('http')) url = `https://${url}`;
+
+    // Load config file and merge with CLI opts
+    const config = loadConfig();
+    const merged = mergeConfig(opts, config);
+
+    // Validate URL
+    validateUrl(url);
+
+    // Validate numeric options
+    if (isNaN(merged.width) || merged.width < 100) {
+      console.error(chalk.red('\n  Invalid width. Must be >= 100\n'));
+      process.exit(1);
+    }
+    if (merged.depth < 0 || merged.depth > 50) {
+      console.error(chalk.red('\n  Invalid depth. Must be 0-50\n'));
+      process.exit(1);
+    }
+
     const prefix = opts.name || nameFromUrl(url);
-    const outDir = resolve(opts.out);
+    const outDir = resolve(merged.out);
 
-    console.log('');
-    console.log(chalk.bold('  designlang'));
-    console.log(chalk.gray(`  ${url}${opts.depth > 0 ? ` (+ ${opts.depth} pages)` : ''}`));
-    console.log('');
+    const jsonMode = opts.json || opts.jsonPretty;
+    const startTime = Date.now();
 
-    const spinner = ora('Launching browser...').start();
+    if (!jsonMode && !opts.quiet) {
+      console.log('');
+      console.log(chalk.bold('  designlang'));
+      console.log(chalk.gray(`  ${url}${merged.depth > 0 ? ` (+ ${merged.depth} pages)` : ''}`));
+      console.log('');
+    }
+
+    const spinner = jsonMode || opts.quiet
+      ? { start() { return this; }, set text(v) {}, succeed() {}, fail() {}, info() {}, stop() {} }
+      : ora('Launching browser...').start();
 
     try {
-      spinner.text = `Crawling${opts.depth > 0 ? ` (depth: ${opts.depth})` : ''}...`;
+      spinner.text = `Crawling${merged.depth > 0 ? ` (depth: ${merged.depth})` : ''}...`;
       // Parse auth options
-      const cookies = opts.cookie || [];
+      const cookies = merged.cookie || [];
       const headers = {};
-      if (opts.header) {
-        for (const h of opts.header) {
+      if (merged.header) {
+        for (const h of merged.header) {
           const [name, ...rest] = h.split(':');
           if (name && rest.length) headers[name.trim()] = rest.join(':').trim();
         }
       }
 
       const design = await extractDesignLanguage(url, {
-        width: opts.width,
-        height: parseInt(opts.height) || 800,
-        wait: opts.wait,
-        dark: opts.dark,
-        depth: opts.depth,
-        screenshots: opts.screenshots || opts.full,
+        width: merged.width,
+        height: parseInt(merged.height) || 800,
+        wait: merged.wait,
+        dark: merged.dark,
+        depth: merged.depth,
+        screenshots: merged.screenshots || merged.full,
         outDir,
+        ignore: merged.ignore,
         cookies: cookies.length > 0 ? cookies : undefined,
         headers: Object.keys(headers).length > 0 ? headers : undefined,
       });
 
       // Responsive capture
-      if (opts.responsive || opts.full) {
+      if (merged.responsive || merged.full) {
         spinner.text = 'Capturing responsive breakpoints...';
-        design.responsive = await captureResponsive(url, { wait: opts.wait });
+        design.responsive = await captureResponsive(url, { wait: merged.wait });
       }
 
       // Interaction state capture
-      if (opts.interactions || opts.full) {
+      if (merged.interactions || merged.full) {
         spinner.text = 'Capturing interaction states...';
-        design.interactions = await captureInteractions(url, { width: opts.width, height: parseInt(opts.height) || 800, wait: opts.wait });
+        design.interactions = await captureInteractions(url, { width: merged.width, height: parseInt(merged.height) || 800, wait: merged.wait });
+      }
+
+      // JSON mode: output and exit
+      if (jsonMode) {
+        const output = opts.jsonPretty ? JSON.stringify(design, null, 2) : JSON.stringify(design);
+        process.stdout.write(output + '\n');
+        process.exit(0);
       }
 
       spinner.text = 'Generating outputs...';
@@ -112,15 +161,22 @@ program
       ];
 
       // Framework-specific themes
-      if (opts.framework === 'react') {
+      if (merged.framework === 'react') {
         files.push({ name: `${prefix}-theme.js`, content: formatReactTheme(design), label: 'React Theme' });
-      } else if (opts.framework === 'shadcn') {
+      } else if (merged.framework === 'shadcn') {
         files.push({ name: `${prefix}-shadcn-theme.css`, content: formatShadcnTheme(design), label: 'shadcn/ui Theme' });
+      } else if (merged.framework === 'vue') {
+        files.push({ name: `${prefix}-vue-theme.js`, content: formatVueTheme(design), label: 'Vue/Vuetify Theme' });
+      } else if (merged.framework === 'svelte') {
+        files.push({ name: `${prefix}-svelte-theme.css`, content: formatSvelteTheme(design), label: 'Svelte Theme' });
       } else {
         // Generate both by default
         files.push({ name: `${prefix}-theme.js`, content: formatReactTheme(design), label: 'React Theme' });
         files.push({ name: `${prefix}-shadcn-theme.css`, content: formatShadcnTheme(design), label: 'shadcn/ui Theme' });
       }
+
+      // WordPress theme (always generated)
+      files.push({ name: `${prefix}-wordpress-theme.json`, content: formatWordPress(design), label: 'WordPress Theme' });
 
       for (const file of files) {
         writeFileSync(join(outDir, file.name), file.content, 'utf-8');
@@ -132,81 +188,111 @@ program
         if (opts.verbose) spinner.info(`Snapshot #${histInfo.snapshotCount} saved for ${histInfo.hostname}`);
       }
 
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
       spinner.succeed('Extraction complete!');
-      console.log('');
-      console.log(chalk.bold('  Output files:'));
-      for (const file of files) {
-        const size = Buffer.byteLength(file.content);
-        const sizeStr = size > 1024 ? `${(size / 1024).toFixed(1)}KB` : `${size}B`;
-        console.log(`  ${chalk.green('✓')} ${chalk.cyan(file.name)} ${chalk.gray(`(${sizeStr})`)} — ${file.label}`);
-      }
-      if (opts.screenshots && design.componentScreenshots && Object.keys(design.componentScreenshots).length > 0) {
-        for (const [, info] of Object.entries(design.componentScreenshots)) {
-          console.log(`  ${chalk.green('✓')} ${chalk.cyan(info.path)} — ${info.label} screenshot`);
+
+      if (opts.quiet) {
+        // Quiet mode: only show file paths
+        for (const file of files) {
+          console.log(join(outDir, file.name));
         }
-      }
-      console.log('');
-      console.log(chalk.gray(`  Saved to ${outDir}`));
+      } else {
+        console.log('');
+        console.log(chalk.bold('  Output files:'));
+        for (const file of files) {
+          const size = Buffer.byteLength(file.content);
+          const sizeStr = size > 1024 ? `${(size / 1024).toFixed(1)}KB` : `${size}B`;
+          console.log(`  ${chalk.green('✓')} ${chalk.cyan(file.name)} ${chalk.gray(`(${sizeStr})`)} — ${file.label}`);
+        }
+        if (opts.screenshots && design.componentScreenshots && Object.keys(design.componentScreenshots).length > 0) {
+          for (const [, info] of Object.entries(design.componentScreenshots)) {
+            console.log(`  ${chalk.green('✓')} ${chalk.cyan(info.path)} — ${info.label} screenshot`);
+          }
+        }
+        console.log('');
+        console.log(chalk.gray(`  Saved to ${outDir}`));
 
-      // Summary
-      console.log('');
-      console.log(chalk.bold('  Summary:'));
-      if (design.meta.pagesAnalyzed > 1) {
-        console.log(`  ${chalk.gray('Pages:')} ${design.meta.pagesAnalyzed} pages analyzed`);
-      }
-      console.log(`  ${chalk.gray('Colors:')} ${design.colors.all.length} unique colors`);
-      console.log(`  ${chalk.gray('Fonts:')} ${design.typography.families.map(f => f.name).join(', ') || 'none detected'}`);
-      console.log(`  ${chalk.gray('Spacing:')} ${design.spacing.scale.length} values${design.spacing.base ? ` (base: ${design.spacing.base}px)` : ''}`);
-      console.log(`  ${chalk.gray('Shadows:')} ${design.shadows.values.length} unique shadows`);
-      console.log(`  ${chalk.gray('Radii:')} ${design.borders.radii.length} unique values`);
-      console.log(`  ${chalk.gray('Breakpoints:')} ${design.breakpoints.length} breakpoints`);
-      console.log(`  ${chalk.gray('Components:')} ${Object.keys(design.components).length} patterns detected`);
-      console.log(`  ${chalk.gray('CSS Vars:')} ${Object.values(design.variables).reduce((s, v) => s + Object.keys(v).length, 0)} custom properties`);
-      if (design.layout) {
-        console.log(`  ${chalk.gray('Layout:')} ${design.layout.gridCount} grids, ${design.layout.flexCount} flex containers`);
-      }
-      if (design.responsive) {
-        console.log(`  ${chalk.gray('Responsive:')} ${design.responsive.viewports.length} viewports, ${design.responsive.changes.length} breakpoint changes`);
-      }
-      if (design.interactions) {
-        const ic = design.interactions;
-        const total = ic.buttons.length + ic.links.length + ic.inputs.length;
-        console.log(`  ${chalk.gray('Interactions:')} ${total} state changes captured`);
-      }
-      if (design.score) {
-        const s = design.score;
-        const gradeColor = s.grade === 'A' ? chalk.green : s.grade === 'B' ? chalk.cyan : s.grade === 'C' ? chalk.yellow : chalk.red;
-        console.log(`  ${chalk.gray('Design Score:')} ${gradeColor(`${s.overall}/100 (${s.grade})`)}${s.issues.length > 0 ? ` — ${s.issues.length} issues` : ''}`);
-      }
+        // Summary
+        console.log('');
+        console.log(chalk.bold('  Summary:'));
+        if (design.meta.pagesAnalyzed > 1) {
+          console.log(`  ${chalk.gray('Pages:')} ${design.meta.pagesAnalyzed} pages analyzed`);
+        }
+        console.log(`  ${chalk.gray('Colors:')} ${design.colors.all.length} unique colors`);
+        console.log(`  ${chalk.gray('Fonts:')} ${design.typography.families.map(f => f.name).join(', ') || 'none detected'}`);
+        console.log(`  ${chalk.gray('Spacing:')} ${design.spacing.scale.length} values${design.spacing.base ? ` (base: ${design.spacing.base}px)` : ''}`);
+        console.log(`  ${chalk.gray('Shadows:')} ${design.shadows.values.length} unique shadows`);
+        console.log(`  ${chalk.gray('Radii:')} ${design.borders.radii.length} unique values`);
+        console.log(`  ${chalk.gray('Breakpoints:')} ${design.breakpoints.length} breakpoints`);
+        console.log(`  ${chalk.gray('Components:')} ${Object.keys(design.components).length} patterns detected`);
+        console.log(`  ${chalk.gray('CSS Vars:')} ${Object.values(design.variables).reduce((s, v) => s + Object.keys(v).length, 0)} custom properties`);
+        if (design.layout) {
+          console.log(`  ${chalk.gray('Layout:')} ${design.layout.gridCount} grids, ${design.layout.flexCount} flex containers`);
+        }
+        if (design.responsive) {
+          console.log(`  ${chalk.gray('Responsive:')} ${design.responsive.viewports.length} viewports, ${design.responsive.changes.length} breakpoint changes`);
+        }
+        if (design.interactions) {
+          const ic = design.interactions;
+          const total = ic.buttons.length + ic.links.length + ic.inputs.length;
+          console.log(`  ${chalk.gray('Interactions:')} ${total} state changes captured`);
+        }
+        if (design.score) {
+          const s = design.score;
+          const gradeColor = s.grade === 'A' ? chalk.green : s.grade === 'B' ? chalk.cyan : s.grade === 'C' ? chalk.yellow : chalk.red;
+          console.log(`  ${chalk.gray('Design Score:')} ${gradeColor(`${s.overall}/100 (${s.grade})`)}${s.issues.length > 0 ? ` — ${s.issues.length} issues` : ''}`);
+        }
 
-      // New v5 extractors
-      if (design.gradients && design.gradients.count > 0) {
-        console.log(`  ${chalk.gray('Gradients:')} ${design.gradients.count} unique gradients`);
-      }
-      if (design.zIndex && design.zIndex.allValues.length > 0) {
-        console.log(`  ${chalk.gray('Z-Index:')} ${design.zIndex.allValues.length} layers${design.zIndex.issues.length > 0 ? ` (${design.zIndex.issues.length} issues)` : ''}`);
-      }
-      if (design.icons && design.icons.count > 0) {
-        console.log(`  ${chalk.gray('Icons:')} ${design.icons.count} SVG icons (${design.icons.dominantStyle || 'mixed'})`);
-      }
-      if (design.fonts && design.fonts.fonts.length > 0) {
-        const sources = design.fonts.fonts.map(f => f.source).filter((v, i, a) => a.indexOf(v) === i);
-        console.log(`  ${chalk.gray('Font Files:')} ${design.fonts.fonts.length} fonts (${sources.join(', ')})`);
-      }
-      if (design.images && design.images.patterns.length > 0) {
-        const total = design.images.patterns.reduce((s, p) => s + p.count, 0);
-        console.log(`  ${chalk.gray('Images:')} ${total} images, ${design.images.patterns.length} style patterns`);
-      }
+        // Score change vs last snapshot
+        const history = getHistory(url);
+        if (history.length > 1 && design.score) {
+          const prev = history[history.length - 2];
+          if (prev.score !== undefined) {
+            const delta = design.score.overall - prev.score;
+            if (delta !== 0) {
+              const sign = delta > 0 ? '+' : '';
+              const color = delta > 0 ? chalk.green : chalk.red;
+              console.log(`  ${chalk.gray('Score \u0394:')} ${color(`${sign}${delta} from last scan`)}`);
+            }
+          }
+        }
 
-      // Accessibility summary
-      if (design.accessibility) {
-        const a = design.accessibility;
-        const scoreColor = a.score >= 80 ? chalk.green : a.score >= 50 ? chalk.yellow : chalk.red;
-        console.log(`  ${chalk.gray('A11y:')} ${scoreColor(`${a.score}% WCAG score`)} (${a.failCount} failing pairs)`);
+        // New v5 extractors
+        if (design.gradients && design.gradients.count > 0) {
+          console.log(`  ${chalk.gray('Gradients:')} ${design.gradients.count} unique gradients`);
+        }
+        if (design.zIndex && design.zIndex.allValues.length > 0) {
+          console.log(`  ${chalk.gray('Z-Index:')} ${design.zIndex.allValues.length} layers${design.zIndex.issues.length > 0 ? ` (${design.zIndex.issues.length} issues)` : ''}`);
+        }
+        if (design.icons && design.icons.count > 0) {
+          console.log(`  ${chalk.gray('Icons:')} ${design.icons.count} SVG icons (${design.icons.dominantStyle || 'mixed'})`);
+        }
+        if (design.fonts && design.fonts.fonts.length > 0) {
+          const sources = design.fonts.fonts.map(f => f.source).filter((v, i, a) => a.indexOf(v) === i);
+          console.log(`  ${chalk.gray('Font Files:')} ${design.fonts.fonts.length} fonts (${sources.join(', ')})`);
+        }
+        if (design.images && design.images.patterns.length > 0) {
+          const total = design.images.patterns.reduce((s, p) => s + p.count, 0);
+          console.log(`  ${chalk.gray('Images:')} ${total} images, ${design.images.patterns.length} style patterns`);
+        }
+
+        // Accessibility summary
+        if (design.accessibility) {
+          const a = design.accessibility;
+          const scoreColor = a.score >= 80 ? chalk.green : a.score >= 50 ? chalk.yellow : chalk.red;
+          console.log(`  ${chalk.gray('A11y:')} ${scoreColor(`${a.score}% WCAG score`)} (${a.failCount} failing pairs)`);
+        }
+
+        console.log(chalk.gray(`  Completed in ${duration}s`));
+        console.log('');
       }
-      console.log('');
 
     } catch (err) {
+      if (jsonMode) {
+        process.stderr.write(JSON.stringify({ error: err.message }) + '\n');
+        process.exit(1);
+      }
       spinner.fail('Extraction failed');
       if (err.message.includes('playwright')) {
         console.error(chalk.red('\n  Playwright is not installed.'));
@@ -227,6 +313,8 @@ program
   .action(async (urlA, urlB, opts) => {
     if (!urlA.startsWith('http')) urlA = `https://${urlA}`;
     if (!urlB.startsWith('http')) urlB = `https://${urlB}`;
+    validateUrl(urlA);
+    validateUrl(urlB);
 
     console.log('');
     console.log(chalk.bold('  designlang diff'));
@@ -283,6 +371,7 @@ program
   .description('View design history for a website')
   .action(async (url) => {
     if (!url.startsWith('http')) url = `https://${url}`;
+    validateUrl(url);
     const history = getHistory(url);
     console.log('');
     console.log(formatHistoryMarkdown(url, history));
@@ -341,6 +430,7 @@ program
   .option('-o, --out <dir>', 'directory with token files to update', '.')
   .action(async (url, opts) => {
     if (!url.startsWith('http')) url = `https://${url}`;
+    validateUrl(url);
 
     console.log('');
     console.log(chalk.bold('  designlang sync'));
@@ -387,6 +477,7 @@ program
   .option('-o, --out <dir>', 'output directory', './cloned-design')
   .action(async (url, opts) => {
     if (!url.startsWith('http')) url = `https://${url}`;
+    validateUrl(url);
 
     console.log('');
     console.log(chalk.bold('  designlang clone'));
@@ -425,6 +516,7 @@ program
   .option('--interval <minutes>', 'check interval in minutes', parseInt, 60)
   .action(async (url, opts) => {
     if (!url.startsWith('http')) url = `https://${url}`;
+    validateUrl(url);
     const intervalMs = (opts.interval || 60) * 60 * 1000;
 
     console.log('');
@@ -463,6 +555,7 @@ program
   .description('Score a website\'s design system quality')
   .action(async (url) => {
     if (!url.startsWith('http')) url = `https://${url}`;
+    validateUrl(url);
 
     const spinner = ora('Analyzing design...').start();
 
@@ -531,6 +624,7 @@ program
   .option('--header <headers...>', 'custom headers')
   .action(async (url, opts) => {
     if (!url.startsWith('http')) url = `https://${url}`;
+    validateUrl(url);
 
     console.log('');
     console.log(chalk.bold('  designlang apply'));
@@ -557,6 +651,36 @@ program
     } catch (err) {
       spinner.fail('Apply failed');
       console.error(chalk.red(`\n  ${err.message}\n`));
+      process.exit(1);
+    }
+  });
+
+// ── Export command ─────────────────────────────────────────
+program
+  .command('export <url>')
+  .description('Export raw design data in various formats')
+  .option('-f, --format <type>', 'output format (json, csv)', 'json')
+  .option('--pretty', 'pretty-print output')
+  .action(async (url, opts) => {
+    if (!url.startsWith('http')) url = `https://${url}`;
+    validateUrl(url);
+
+    try {
+      const design = await extractDesignLanguage(url);
+
+      if (opts.format === 'csv') {
+        // Export colors as CSV
+        const rows = ['hex,rgb_r,rgb_g,rgb_b,hsl_h,hsl_s,hsl_l,count,contexts'];
+        for (const c of design.colors.all) {
+          rows.push(`${c.hex},${c.rgb.r},${c.rgb.g},${c.rgb.b},${c.hsl.h},${c.hsl.s},${c.hsl.l},${c.count},"${c.contexts.join(';')}"`);
+        }
+        process.stdout.write(rows.join('\n') + '\n');
+      } else {
+        const output = opts.pretty ? JSON.stringify(design, null, 2) : JSON.stringify(design);
+        process.stdout.write(output + '\n');
+      }
+    } catch (err) {
+      process.stderr.write(`Error: ${err.message}\n`);
       process.exit(1);
     }
   });
