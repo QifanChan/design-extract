@@ -351,4 +351,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). PRs welcome!
 
 ## License
 
-[MIT](LICENSE) - Manavarya Singh
+[MIT](LICENSE) - Manav Arya Singh
