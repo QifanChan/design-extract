@@ -8,12 +8,16 @@ import ora from 'ora';
 import { extractDesignLanguage } from '../src/index.js';
 import { formatMarkdown } from '../src/formatters/markdown.js';
 import { formatTokens } from '../src/formatters/tokens.js';
+import { formatDtcgTokens } from '../src/formatters/dtcg-tokens.js';
 import { formatTailwind } from '../src/formatters/tailwind.js';
 import { formatCssVars } from '../src/formatters/css-vars.js';
 import { formatPreview } from '../src/formatters/preview.js';
 import { formatFigma } from '../src/formatters/figma.js';
 import { formatReactTheme, formatShadcnTheme } from '../src/formatters/theme.js';
-import { formatWordPress } from '../src/formatters/wordpress.js';
+import { formatWordPress, formatWordPressTheme } from '../src/formatters/wordpress.js';
+import { formatIosSwiftUI } from '../src/formatters/ios-swiftui.js';
+import { formatAndroidCompose } from '../src/formatters/android-compose.js';
+import { formatFlutterDart } from '../src/formatters/flutter-dart.js';
 import { formatVueTheme } from '../src/formatters/vue-theme.js';
 import { formatSvelteTheme } from '../src/formatters/svelte-theme.js';
 import { loadConfig, mergeConfig } from '../src/config.js';
@@ -62,6 +66,8 @@ program
   .option('--cookie <cookies...>', 'cookies for authenticated pages (name=value)')
   .option('--header <headers...>', 'custom headers (name:value)')
   .option('--ignore <selectors...>', 'CSS selectors to remove before extraction')
+  .option('--tokens-legacy', 'Emit pre-v7 flat token JSON (backward compat)')
+  .option('--platforms <csv>', 'Additional platforms: web,ios,android,flutter,wordpress,all (web is always emitted)', 'web')
   .option('--json', 'output raw JSON to stdout (for CI/CD)')
   .option('--json-pretty', 'output formatted JSON to stdout')
   .option('--no-history', 'skip saving to history')
@@ -153,7 +159,7 @@ program
 
       const files = [
         { name: `${prefix}-design-language.md`, content: formatMarkdown(design), label: 'Markdown (AI-optimized)' },
-        { name: `${prefix}-design-tokens.json`, content: formatTokens(design), label: 'Design Tokens (W3C)' },
+        { name: `${prefix}-design-tokens.json`, content: merged.tokensLegacy ? formatTokens(design) : JSON.stringify(formatDtcgTokens(design), null, 2), label: merged.tokensLegacy ? 'Design Tokens (legacy)' : 'Design Tokens (DTCG v1)' },
         { name: `${prefix}-tailwind.config.js`, content: formatTailwind(design), label: 'Tailwind Config' },
         { name: `${prefix}-variables.css`, content: formatCssVars(design), label: 'CSS Variables' },
         { name: `${prefix}-preview.html`, content: formatPreview(design), label: 'Visual Preview' },
@@ -182,6 +188,46 @@ program
         writeFileSync(join(outDir, file.name), file.content, 'utf-8');
       }
 
+      // Multi-platform emission (v7.0). web is already emitted above.
+      const platforms = merged.platforms || ['web'];
+      const dtcgTokens = formatDtcgTokens(design);
+      const platformFiles = [];
+      if (platforms.includes('ios')) {
+        const dir = join(outDir, 'ios');
+        mkdirSync(dir, { recursive: true });
+        const path = join(dir, 'DesignTokens.swift');
+        writeFileSync(path, formatIosSwiftUI(dtcgTokens), 'utf-8');
+        platformFiles.push({ path, label: 'iOS SwiftUI' });
+      }
+      if (platforms.includes('android')) {
+        const dir = join(outDir, 'android');
+        mkdirSync(dir, { recursive: true });
+        const out = formatAndroidCompose(dtcgTokens);
+        for (const name of Object.keys(out)) {
+          const p = join(dir, name);
+          writeFileSync(p, out[name], 'utf-8');
+          platformFiles.push({ path: p, label: `Android (${name})` });
+        }
+      }
+      if (platforms.includes('flutter')) {
+        const dir = join(outDir, 'flutter');
+        mkdirSync(dir, { recursive: true });
+        const p = join(dir, 'design_tokens.dart');
+        writeFileSync(p, formatFlutterDart(dtcgTokens), 'utf-8');
+        platformFiles.push({ path: p, label: 'Flutter Dart' });
+      }
+      if (platforms.includes('wordpress')) {
+        const dir = join(outDir, 'wordpress-theme');
+        mkdirSync(dir, { recursive: true });
+        const out = formatWordPressTheme(dtcgTokens, design);
+        for (const name of Object.keys(out)) {
+          const p = join(dir, name);
+          mkdirSync(join(p, '..'), { recursive: true });
+          writeFileSync(p, out[name], 'utf-8');
+          platformFiles.push({ path: p, label: `WordPress (${name})` });
+        }
+      }
+
       // Save to history
       if (opts.history !== false) {
         const histInfo = saveSnapshot(design);
@@ -197,6 +243,9 @@ program
         for (const file of files) {
           console.log(join(outDir, file.name));
         }
+        for (const pf of platformFiles) {
+          console.log(pf.path);
+        }
       } else {
         console.log('');
         console.log(chalk.bold('  Output files:'));
@@ -204,6 +253,9 @@ program
           const size = Buffer.byteLength(file.content);
           const sizeStr = size > 1024 ? `${(size / 1024).toFixed(1)}KB` : `${size}B`;
           console.log(`  ${chalk.green('✓')} ${chalk.cyan(file.name)} ${chalk.gray(`(${sizeStr})`)} — ${file.label}`);
+        }
+        for (const pf of platformFiles) {
+          console.log(`  ${chalk.green('✓')} ${chalk.cyan(pf.path)} — ${pf.label}`);
         }
         if (opts.screenshots && design.componentScreenshots && Object.keys(design.componentScreenshots).length > 0) {
           for (const [, info] of Object.entries(design.componentScreenshots)) {

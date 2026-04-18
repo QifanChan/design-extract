@@ -16,6 +16,11 @@ import { extractZIndex } from './extractors/zindex.js';
 import { extractIcons } from './extractors/icons.js';
 import { extractFonts } from './extractors/fonts.js';
 import { extractImageStyles } from './extractors/images.js';
+import { extractStackFingerprint } from './extractors/stack-fingerprint.js';
+import { extractCssHealth } from './extractors/css-health.js';
+import { remediateFailingPairs } from './extractors/a11y-remediation.js';
+import { extractSemanticRegions } from './extractors/semantic-regions.js';
+import { clusterComponents } from './extractors/component-clusters.js';
 
 function safeExtract(fn, ...args) {
   try { return fn(...args); } catch { return null; }
@@ -54,6 +59,10 @@ export async function extractDesignLanguage(url, options = {}) {
     fonts: rawData.light.fontData ? (safeExtract(extractFonts, rawData.light.fontData) || { fonts: [], systemFonts: [] }) : { fonts: [], systemFonts: [] },
     images: rawData.light.images ? (safeExtract(extractImageStyles, rawData.light.images) || { patterns: [], aspectRatios: [] }) : { patterns: [], aspectRatios: [] },
     componentScreenshots: rawData.componentScreenshots || {},
+    stack: safeExtract(extractStackFingerprint, rawData.light.stack) || { framework: 'unknown', css: { layer: 'unknown', tailwind: null }, analytics: [], detectedFrom: { globalCount: 0, scriptCount: 0, classSampleSize: 0 } },
+    cssHealth: safeExtract(extractCssHealth, rawData.light.cssCoverage) || null,
+    regions: safeExtract(extractSemanticRegions, rawData.light.sections) || [],
+    componentClusters: safeExtract(clusterComponents, rawData.light.componentCandidates) || [],
     score: null,
   };
 
@@ -77,6 +86,26 @@ export async function extractDesignLanguage(url, options = {}) {
     };
   }
 
+  // A11y remediation: derive failing pairs from accessibility extractor output
+  // and propose palette colors that pass the matching WCAG rule.
+  try {
+    const a11y = design.accessibility || {};
+    const palette = (design.colors?.all || []).map(c => c.hex).filter(Boolean);
+    const failingPairs = (a11y.pairs || [])
+      .filter(p => p.level === 'FAIL')
+      .map(p => ({
+        fg: p.foreground,
+        bg: p.background,
+        ratio: p.ratio,
+        rule: p.isLargeText ? 'AA-large' : 'AA-normal',
+      }));
+    design.accessibility = {
+      ...a11y,
+      failingPairs,
+      remediation: remediateFailingPairs(failingPairs, palette),
+    };
+  } catch { /* non-fatal */ }
+
   design.score = safeExtract(scoreDesignSystem, design);
   if (design.score === null) warnings.push('scoring failed');
 
@@ -85,6 +114,7 @@ export async function extractDesignLanguage(url, options = {}) {
 
 export { crawlPage } from './crawler.js';
 export { formatTokens } from './formatters/tokens.js';
+export { formatDtcgTokens } from './formatters/dtcg-tokens.js';
 export { formatMarkdown } from './formatters/markdown.js';
 export { formatTailwind } from './formatters/tailwind.js';
 export { formatCssVars } from './formatters/css-vars.js';

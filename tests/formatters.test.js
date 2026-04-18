@@ -7,6 +7,12 @@ import { formatCssVars } from '../src/formatters/css-vars.js';
 import { formatPreview } from '../src/formatters/preview.js';
 import { formatFigma } from '../src/formatters/figma.js';
 import { formatReactTheme, formatShadcnTheme } from '../src/formatters/theme.js';
+import { formatDtcgTokens } from '../src/formatters/dtcg-tokens.js';
+import { resolveRef } from '../src/formatters/_token-ref.js';
+import { formatIosSwiftUI } from '../src/formatters/ios-swiftui.js';
+import { formatAndroidCompose } from '../src/formatters/android-compose.js';
+import { formatFlutterDart } from '../src/formatters/flutter-dart.js';
+import { formatWordPressTheme } from '../src/formatters/wordpress.js';
 
 // ── Shared mock design object ───────────────────────────────────
 
@@ -223,6 +229,44 @@ describe('formatTokens', () => {
   it('contains breakpoint tokens', () => {
     const parsed = JSON.parse(formatTokens(mockDesign));
     assert.ok(parsed.breakpoint);
+  });
+});
+
+// ── formatDtcgTokens ────────────────────────────────────────────
+
+describe('formatDtcgTokens', () => {
+  const minimalDesign = {
+    colors: { primary: '#3b82f6', secondary: '#10b981', neutrals: ['#111','#888','#eee'], backgrounds: ['#fff'], text: ['#111'], all: [] },
+    typography: { families: ['Inter'], scale: [{ size:'16px', weight:'400', lineHeight:'1.5' }] },
+    spacing: { scale: ['4px','8px','16px'], base: '4px' },
+    shadows: { values: ['0 1px 2px rgba(0,0,0,0.1)'] },
+    borders: { radii: ['4px','8px'] },
+    variables: {},
+  };
+
+  it('emits $value/$type for every leaf', () => {
+    const out = formatDtcgTokens(minimalDesign);
+    assert.equal(out.primitive.color.brand.primary.$value, '#3b82f6');
+    assert.equal(out.primitive.color.brand.primary.$type, 'color');
+  });
+
+  it('emits semantic aliases referencing primitives', () => {
+    const out = formatDtcgTokens(minimalDesign);
+    assert.match(out.semantic.color.action.primary.$value, /^\{primitive\.color\.brand\.primary\}$/);
+    assert.equal(out.semantic.color.action.primary.$type, 'color');
+  });
+
+  it('emits composite typography tokens', () => {
+    const out = formatDtcgTokens(minimalDesign);
+    const body = out.semantic.typography.body;
+    assert.equal(body.$type, 'typography');
+    assert.equal(body.$value.fontFamily, 'Inter');
+    assert.equal(body.$value.fontSize, '16px');
+  });
+
+  it('round-trips through JSON unchanged', () => {
+    const out = formatDtcgTokens(minimalDesign);
+    assert.deepEqual(JSON.parse(JSON.stringify(out)), out);
   });
 });
 
@@ -473,5 +517,150 @@ describe('formatShadcnTheme', () => {
   it('contains shadcn/ui comment', () => {
     const result = formatShadcnTheme(mockDesign);
     assert.ok(result.includes('shadcn/ui'));
+  });
+});
+
+// ── resolveRef (token reference helper) ─────────────────────────
+
+describe('resolveRef', () => {
+  const tokens = {
+    primitive: {
+      color: { brand: { primary: { $value: '#3B82F6', $type: 'color' } } },
+      spacing: { s0: { $value: '4px', $type: 'dimension' } },
+    },
+    semantic: {
+      color: {
+        action: {
+          primary: { $value: '{primitive.color.brand.primary}', $type: 'color' },
+        },
+      },
+      alias: {
+        ref: { $value: '{semantic.color.action.primary}', $type: 'color' },
+      },
+    },
+  };
+
+  it('returns the raw $value for non-reference tokens', () => {
+    assert.equal(resolveRef(tokens, 'primitive.color.brand.primary'), '#3B82F6');
+  });
+
+  it('follows one-level references', () => {
+    assert.equal(resolveRef(tokens, 'semantic.color.action.primary'), '#3B82F6');
+  });
+
+  it('follows chained references', () => {
+    assert.equal(resolveRef(tokens, 'semantic.alias.ref'), '#3B82F6');
+  });
+
+  it('returns undefined for missing paths', () => {
+    assert.equal(resolveRef(tokens, 'primitive.does.not.exist'), undefined);
+  });
+
+  it('resolves dimension tokens', () => {
+    assert.equal(resolveRef(tokens, 'primitive.spacing.s0'), '4px');
+  });
+});
+
+// ── formatIosSwiftUI ────────────────────────────────────────────
+
+describe('formatIosSwiftUI', () => {
+  const tokens = formatDtcgTokens(mockDesign);
+
+  it('emits import SwiftUI and extension Color', () => {
+    const result = formatIosSwiftUI(tokens);
+    assert.ok(result.includes('import SwiftUI'));
+    assert.ok(result.includes('extension Color'));
+  });
+
+  it('emits actionPrimary with resolved primitive hex', () => {
+    const result = formatIosSwiftUI(tokens);
+    // mockDesign primary is #0066cc → semantic.color.action.primary resolves to #0066cc
+    assert.ok(
+      /static let actionPrimary = Color\(hex: 0x0066CC\)/.test(result),
+      'expected actionPrimary with resolved hex',
+    );
+  });
+
+  it('resolves semantic references (no raw {...} strings in output)', () => {
+    const result = formatIosSwiftUI(tokens);
+    assert.ok(!result.includes('{primitive.'), 'should not leak DTCG refs');
+  });
+
+  it('is idempotent', () => {
+    const a = formatIosSwiftUI(tokens);
+    const b = formatIosSwiftUI(tokens);
+    assert.equal(a, b);
+  });
+});
+
+// ── formatAndroidCompose ────────────────────────────────────────
+
+describe('formatAndroidCompose', () => {
+  const tokens = formatDtcgTokens(mockDesign);
+
+  it('Theme.kt contains object DesignTokens and ActionPrimary', () => {
+    const out = formatAndroidCompose(tokens);
+    assert.ok(out['Theme.kt'].includes('object DesignTokens'));
+    assert.ok(/val ActionPrimary = Color\(0xFF0066CC\)/.test(out['Theme.kt']));
+  });
+
+  it('colors.xml has <color name="action_primary">', () => {
+    const out = formatAndroidCompose(tokens);
+    assert.ok(out['colors.xml'].includes('<color name="action_primary">#FF0066CC</color>'));
+  });
+
+  it('dimens.xml has <dimen name="spacing_s0"> with dp unit', () => {
+    const out = formatAndroidCompose(tokens);
+    assert.ok(/<dimen name="spacing_s0">\d+dp<\/dimen>/.test(out['dimens.xml']));
+  });
+});
+
+// ── formatFlutterDart ───────────────────────────────────────────
+
+describe('formatFlutterDart', () => {
+  const tokens = formatDtcgTokens(mockDesign);
+
+  it('contains class DesignTokens', () => {
+    const out = formatFlutterDart(tokens);
+    assert.ok(out.includes('class DesignTokens'));
+  });
+
+  it('emits actionPrimary with resolved ARGB hex', () => {
+    const out = formatFlutterDart(tokens);
+    assert.ok(
+      /static const Color actionPrimary = Color\(0xFF0066CC\);/.test(out),
+      'expected actionPrimary with resolved hex',
+    );
+  });
+});
+
+// ── formatWordPressTheme (block-theme skeleton) ─────────────────
+
+describe('formatWordPressTheme', () => {
+  const tokens = formatDtcgTokens(mockDesign);
+  const out = formatWordPressTheme(tokens, mockDesign);
+
+  it('theme.json parses and has color palette with at least one entry', () => {
+    const parsed = JSON.parse(out['theme.json']);
+    assert.ok(Array.isArray(parsed.settings.color.palette));
+    assert.ok(parsed.settings.color.palette.length > 0);
+    // At least one entry should have a hex color derived from semantics
+    const actionPrimary = parsed.settings.color.palette.find(p => p.slug === 'action-primary');
+    assert.ok(actionPrimary);
+    assert.equal(actionPrimary.color.toLowerCase(), '#0066cc');
+  });
+
+  it('theme.json is version 3', () => {
+    const parsed = JSON.parse(out['theme.json']);
+    assert.equal(parsed.version, 3);
+  });
+
+  it('style.css contains Theme Name and --action-primary custom prop', () => {
+    assert.ok(out['style.css'].includes('Theme Name:'));
+    assert.ok(out['style.css'].includes('--action-primary:'));
+  });
+
+  it('functions.php starts with <?php', () => {
+    assert.ok(out['functions.php'].startsWith('<?php'));
   });
 });
