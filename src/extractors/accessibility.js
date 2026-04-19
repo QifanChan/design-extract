@@ -28,16 +28,59 @@ function wcagLevel(ratio, isLargeText) {
   return 'FAIL';
 }
 
+// Tags where "foreground vs background" contrast is *not* a WCAG text concern —
+// SVG/icon glyphs, media, form primitives, and structural containers without
+// direct text. Filtering these removes the overlay/decorative false-positives
+// that used to crater scores on dark-themed sites.
+const NON_TEXT_TAGS = new Set([
+  'svg', 'path', 'circle', 'rect', 'polygon', 'polyline', 'line', 'ellipse',
+  'use', 'defs', 'g', 'clippath', 'mask', 'filter', 'symbol', 'stop', 'lineargradient', 'radialgradient',
+  'img', 'picture', 'video', 'audio', 'canvas', 'iframe', 'source', 'track',
+  'br', 'hr', 'wbr',
+  'input', 'select', 'textarea', 'progress', 'meter', 'option', 'optgroup',
+  'script', 'style', 'link', 'meta', 'head', 'html', 'body',
+  'main', 'section', 'article', 'aside', 'header', 'footer', 'nav',
+  'div', 'figure', 'form', 'fieldset', 'ul', 'ol', 'dl',
+]);
+
+const TEXT_BEARING_TAGS = new Set([
+  'p', 'a', 'button', 'label', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'td', 'th', 'code', 'pre', 'em', 'strong', 'small', 'b', 'i', 'u',
+  'time', 'summary', 'figcaption', 'blockquote', 'q', 'mark', 'cite', 'abbr',
+  'dt', 'dd', 'kbd', 'samp', 'var', 'sub', 'sup', 'del', 'ins', 'caption', 'legend',
+  // span is a high-noise/high-signal tag — it wraps both real text and
+  // decorative glyphs. Include it but require an explicit background (the
+  // opacity filter downstream still removes the decorative transparent ones).
+  'span',
+]);
+
+function isContrastRelevant(el) {
+  const tag = (el.tag || '').toLowerCase();
+  if (NON_TEXT_TAGS.has(tag)) return false;
+  if (!TEXT_BEARING_TAGS.has(tag)) return false;
+  // If the crawler captured hasText, trust it — filters decorative
+  // span/link/button wrappers that hold no real glyphs. If hasText wasn't
+  // captured (older fixtures, unit tests) fall back to inclusion.
+  if (el.hasText === false) return false;
+  return true;
+}
+
 export function extractAccessibility(computedStyles) {
   const pairs = new Map(); // "fg|bg" -> { fg, bg, count, elements }
 
   for (const el of computedStyles) {
+    if (!isContrastRelevant(el)) continue;
+
     const fg = parseColor(el.color);
     const bg = parseColor(el.backgroundColor);
-    if (!fg || !bg || bg.a === 0) continue;
+    if (!fg || !bg) continue;
+    // Skip transparent/semi-transparent — real contrast depends on the parent
+    // stack which we don't composite. Counting these as "fails" is noise.
+    if (bg.a < 0.9 || fg.a < 0.9) continue;
 
     const fgHex = rgbToHex(fg);
     const bgHex = rgbToHex(bg);
+    if (fgHex === bgHex) continue;
     const key = `${fgHex}|${bgHex}`;
 
     if (!pairs.has(key)) {

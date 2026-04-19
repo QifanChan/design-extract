@@ -39,6 +39,8 @@ export function mergeConfig(cliOpts, config) {
     cookieFile: cliOpts.cookieFile || config.cookieFile,
     insecure: cliOpts.insecure || config.insecure || false,
     userAgent: cliOpts.userAgent || config.userAgent,
+    selector: cliOpts.selector || config.selector,
+    systemChrome: cliOpts.systemChrome || config.systemChrome || false,
   };
 }
 

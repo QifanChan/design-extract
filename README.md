@@ -12,7 +12,11 @@
 ---
 
 <p align="center">
-  <img src="designlang.png" alt="designlang in action" width="100%">
+  <img src="website/public/demo.gif" alt="designlang in action — paste a URL, get Tailwind + shadcn + Figma tokens" width="100%" onerror="this.onerror=null;this.src='designlang.png'">
+</p>
+
+<p align="center">
+  <sub>The GIF above is generated from <code>docs/demo.tape</code>. Re-record with <code>vhs docs/demo.tape -o website/public/demo.gif</code>.</sub>
 </p>
 
 **designlang** crawls any website with a headless browser, extracts every computed style from the live DOM, and generates **8 output files** — including an AI-optimized markdown file, visual HTML preview, Tailwind config, React theme, shadcn/ui theme, Figma variables, W3C design tokens, and CSS custom properties.
@@ -396,6 +400,9 @@ Options:
   --header <headers...>   Custom headers (name:value)
   --user-agent <ua>       Override the browser User-Agent string
   --insecure              Ignore HTTPS/SSL certificate errors (self-signed, dev, proxies)
+  --selector <css>        Only extract from elements matching this CSS selector (e.g. ".pricing-card")
+  --system-chrome         Use the system Chrome install instead of the bundled Chromium (skips 150MB download)
+  --json                  Print full extraction as JSON to stdout (for piping into other tools)
   --framework <type>      Only generate specific theme (react, shadcn)
   --platforms <csv>       Additional platforms: web,ios,android,flutter,wordpress,all (additive)
   --emit-agent-rules      Emit Cursor / Claude Code / CLAUDE.md / agents.md rule files
@@ -467,6 +474,20 @@ Running `designlang https://vercel.com --full`:
 4. **Format** — 8 formatter modules generate output files
 5. **Score** — Accessibility extractor calculates WCAG contrast ratios for all color pairs
 6. **Capture** — Optional: screenshots, responsive viewport crawling, interaction state recording
+
+## Install Everywhere
+
+designlang ships surfaces beyond the CLI:
+
+| Surface | Path | Description |
+|---------|------|-------------|
+| **CLI** | `npx designlang <url>` | Main entry point. |
+| **VS Code extension** | [`vscode-extension/`](vscode-extension/) | "Extract design from URL" command + auto-inject into workspace. |
+| **Raycast extension** | [`raycast-extension/`](raycast-extension/) | Extract, score, and "copy CLI command" from Raycast. |
+| **Figma plugin** | [`figma-plugin/`](figma-plugin/) | Paste a URL inside Figma, get a full Variables collection. |
+| **GitHub Action** | [`github-action/`](github-action/) | "Design regression guard" — diffs tokens on every PR and comments. |
+| **Chrome extension** | [`chrome-extension/`](chrome-extension/) | One-click handoff from any tab (MV3, `activeTab` only). |
+| **MCP server** | `npx designlang mcp` | Exposes the extracted design as MCP resources + tools for Cursor, Claude Code, Windsurf, etc. See [`docs/MCP-REGISTRY.md`](docs/MCP-REGISTRY.md). |
 
 ## Agent Skill
 

@@ -24,6 +24,8 @@ export async function crawlPage(url, options = {}) {
     insecure = false,
     userAgent,
     deepInteract = false,
+    selector,
+    channel,
   } = options;
 
   const launchArgs = [
@@ -39,6 +41,9 @@ export async function crawlPage(url, options = {}) {
   const browser = await chromium.launch({
     headless: true,
     ...(executablePath && { executablePath }),
+    // channel: 'chrome' forces Playwright to use the system Chrome install
+    // instead of the 150MB bundled Chromium — see --system-chrome.
+    ...(channel && { channel }),
     args: launchArgs,
   });
   try {
@@ -97,7 +102,7 @@ export async function crawlPage(url, options = {}) {
       interactState = await runInteractionPass(page).catch(() => null);
     }
 
-    const lightData = await extractPageData(page, ignore);
+    const lightData = await extractPageData(page, ignore, selector);
     lightData.cssCoverage = cssCoverage;
     if (interactState) lightData.interactState = interactState;
 
@@ -388,8 +393,8 @@ async function runInteractionPass(page) {
   return state;
 }
 
-async function extractPageData(page, ignoreSelectors) {
-  const data = await page.evaluate(({ maxElements, ignoreSelectors }) => {
+async function extractPageData(page, ignoreSelectors, scopeSelector) {
+  const data = await page.evaluate(({ maxElements, ignoreSelectors, scopeSelector }) => {
     // Remove ignored elements before extraction
     if (ignoreSelectors && ignoreSelectors.length > 0) {
       for (const sel of ignoreSelectors) {
@@ -420,7 +425,23 @@ async function extractPageData(page, ignoreSelectors) {
       }
       return collected;
     }
-    const elements = collectElements(document, []);
+
+    // If --selector was provided, scope element collection to the matching
+    // subtrees only. Falls back to the full document if the selector is
+    // invalid or returns no matches.
+    let scopeRoots = [document];
+    if (scopeSelector) {
+      try {
+        const matches = Array.from(document.querySelectorAll(scopeSelector));
+        if (matches.length > 0) scopeRoots = matches;
+      } catch { /* invalid selector → use document */ }
+    }
+    const elements = [];
+    for (const root of scopeRoots) {
+      if (root !== document && root.nodeType === 1) elements.push(root);
+      collectElements(root, elements);
+      if (elements.length >= maxElements) break;
+    }
 
     // Build a lightweight index: stylesheet URL + their top selectors.
     // Used to attribute each element's primary source stylesheet.
@@ -502,8 +523,16 @@ async function extractPageData(page, ignoreSelectors) {
         sourceAttrBudget--;
       }
 
+      // hasText: at least one direct text-node child with visible characters —
+      // lets downstream extractors filter decorative spans/divs out of WCAG
+      // contrast accounting.
+      let hasText = false;
+      for (const node of el.childNodes) {
+        if (node.nodeType === 3 && node.textContent && node.textContent.trim()) { hasText = true; break; }
+      }
+
       results.computedStyles.push({
-        tag, classList, role, area,
+        tag, classList, role, area, hasText,
         color: cs.color,
         backgroundColor: cs.backgroundColor,
         backgroundImage: cs.backgroundImage,
@@ -840,7 +869,7 @@ async function extractPageData(page, ignoreSelectors) {
     }
 
     return results;
-  }, { maxElements: MAX_ELEMENTS, ignoreSelectors: ignoreSelectors || [] });
+  }, { maxElements: MAX_ELEMENTS, ignoreSelectors: ignoreSelectors || [], scopeSelector: scopeSelector || null });
 
   // Fetch and parse cross-origin stylesheets
   if (data.crossOriginSheets && data.crossOriginSheets.length > 0) {

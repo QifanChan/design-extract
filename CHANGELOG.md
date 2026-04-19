@@ -1,5 +1,40 @@
 # Changelog
 
+## [8.0.0] — 2026-04-20
+
+A credibility-and-distribution release. Three reliability bugs that hurt trust on real sites are fixed; three DX flags close the most-requested CLI gaps; five new surfaces (VS Code, Raycast, Figma, GitHub Actions, MCP registry) ship alongside.
+
+### Reliability
+
+- **Brand / primary color detection rewritten** — the extractor now ranks chromatic clusters by `interactiveBg × 100 + saturation × 2 + log(usage)` and requires either HSL saturation > 25 or an interactive-bg hit to qualify as chromatic. Previously the extractor picked the most-counted color, which on neutral-heavy sites like Linear meant the "Primary" was a pale gray (`#d0d6e0`). v8 correctly picks Linear's lime CTA (`#e4f222`) and Stripe's purple (`#533afd`). `src/extractors/colors.js`.
+- **Accessibility scoring defused** — the crawler now emits a `hasText` boolean per element (a direct text-node child with visible characters), and the WCAG extractor filters out decorative glyph wrappers, transparent/overlay pairs, and non-text containers. Linear's WCAG score moved from 25% (171 failing pairs) to 83% (1 failing pair). `src/extractors/accessibility.js`, `src/crawler.js`.
+- **Design-system score recalibrated** — thresholds for color count, shadow count, border-radii count, typography weight, and type-scale size were re-fit against ground-truth sites (Stripe, Linear, Vercel, GitHub, Apple). `cssHealth` is now weighted in the overall (8/100). Linear 47→76, Stripe 81→88, Apple 83→86, Vercel 64→76. `src/extractors/scoring.js`.
+
+### Added
+
+- **`--selector <css>`** — scopes extraction to a DOM subtree (e.g. `designlang https://stripe.com --selector "footer"`). Stripe full-page extraction drops from 2,409 elements to 112 when scoped to the footer. Falls back to the full document if the selector is invalid or empty.
+- **`--system-chrome`** — forces Playwright to use the locally installed Chrome (`channel: 'chrome'`) instead of the ~150 MB bundled Chromium, for faster `npx` first-runs in environments that already have Chrome.
+- **`--json` output mode** — full extraction payload written to stdout (suppresses progress UI) for piping into other tools. This was a partial implementation in v7; v8 makes it first-class and adds it to the CLI reference.
+- **VS Code extension** (`vscode-extension/`) — `designlang: Extract design from URL` and `designlang: Extract and inject into workspace` commands.
+- **Raycast extension** (`raycast-extension/`) — Extract, Score, and "Copy CLI command for URL" commands.
+- **Figma plugin** (`figma-plugin/`) — URL or paste-JSON → Figma Variables collections (MV for Figma's `figma.variables` API, with multi-mode support).
+- **GitHub Action** (`github-action/`) — "Design regression guard": runs `designlang` on a URL, diffs tokens vs a committed baseline, and comments the delta on the pull request. Optional `fail-on-change`.
+- **Smithery + MCP registry** (`smithery.yaml`, `smithery.dockerfile`, `docs/MCP-REGISTRY.md`) — one-command install in Smithery; checklist for the official MCP registry, Cursor, and Claude Desktop.
+- **Chrome Web Store + Firefox + Edge listing prep** (`chrome-extension/PRIVACY.md`, `chrome-extension/STORE_LISTING.md`) — privacy policy and store copy.
+- **README hero demo tape** (`docs/demo.tape`) — VHS script that renders an animated terminal GIF into `website/public/demo.gif`.
+- **Launch kit** (`docs/LAUNCH.md`) — Product Hunt / Show HN / Twitter copy + day-of checklist.
+
+### Changed
+
+- README: hero image now references the animated demo (with static PNG fallback), adds an "Install everywhere" table covering all surfaces, documents `--selector`, `--system-chrome`, and `--json`.
+- `.npmignore`: excludes all companion-surface directories (`vscode-extension/`, `raycast-extension/`, `figma-plugin/`, `github-action/`, `chrome-extension/`, `website/`) and test fixtures so the npm tarball stays small — each surface publishes to its own registry.
+- `bin/design-extract.js`: reports `8.0.0` from `--version`.
+- `src/config.js`: whitelists `selector` and `systemChrome` from CLI/config.
+
+### Thanks
+
+- To everyone who flagged that Linear's primary was coming out as light gray — that single complaint drove the brand-color rewrite.
+
 ## [7.2.0] — 2026-04-19
 
 ### Added

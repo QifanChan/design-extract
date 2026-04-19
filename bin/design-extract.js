@@ -48,7 +48,7 @@ const program = new Command();
 program
   .name('designlang')
   .description('Extract the complete design language from any website')
-  .version('6.0.0');
+  .version('8.0.0');
 
 // ── Main command: extract ──────────────────────────────────────
 program
@@ -72,6 +72,8 @@ program
   .option('--user-agent <ua>', 'override the browser User-Agent string')
   .option('--insecure', 'ignore HTTPS/SSL certificate errors (self-signed, dev, proxies)')
   .option('--ignore <selectors...>', 'CSS selectors to remove before extraction')
+  .option('--selector <css>', 'only extract design from elements matching this CSS selector (e.g. ".pricing-card")')
+  .option('--system-chrome', 'use the system Chrome install instead of the bundled Chromium (skips the 150MB Playwright download)')
   .option('--tokens-legacy', 'Emit pre-v7 flat token JSON (backward compat)')
   .option('--platforms <csv>', 'Additional platforms: web,ios,android,flutter,wordpress,all (web is always emitted)', 'web')
   .option('--emit-agent-rules', 'Emit Cursor/Claude Code/generic agent rules')
@@ -155,6 +157,8 @@ program
         insecure: merged.insecure || false,
         userAgent: merged.userAgent,
         deepInteract: merged.deepInteract || merged.full,
+        selector: merged.selector,
+        channel: merged.systemChrome ? 'chrome' : undefined,
       });
 
       // Responsive capture
