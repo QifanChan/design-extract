@@ -634,7 +634,7 @@ In Claude Code, use `/extract-design <url>`.
 
 ## Website
 
-**[design-extract-beta.vercel.app](https://design-extract-beta.vercel.app)** — the brutalist product page.
+**[https://designlang.manavaryasingh.com](https://designlang.manavaryasingh.com/)** — the brutalist product page.
 
 ## Contributing
 
