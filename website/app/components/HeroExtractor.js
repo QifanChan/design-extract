@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Marginalia from './Marginalia';
+import ResultViewer from './ResultViewer';
 
 const STAGE_LABEL = {
   crawl: 'walking DOM',
@@ -295,7 +296,7 @@ export default function HeroExtractor() {
       )}
 
       <p className="mono" style={{ marginTop: 14, fontSize: 11, color: 'var(--ink-3)' }}>
-        Free, rate-limited to 3 extractions per day. Private IPs rejected. No accounts.
+        Free demo: 1 extraction per day. Unlimited via the CLI — no account.
       </p>
 
       {/* ── Live paint ─────────────────────────────────────── */}
@@ -405,24 +406,11 @@ export default function HeroExtractor() {
       )}
 
       {files && (
-        <div style={{ marginTop: 'var(--r6)', display: 'flex', gap: 'var(--r3)', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="cta"
-            disabled={downloadBusy}
-          >
-            {downloadBusy ? 'Zipping…' : `Download all (.zip) — ${Object.keys(files).length} files`}
-          </button>
-          <button
-            type="button"
-            onClick={handleCopyMarkdown}
-            className="cta"
-            style={{ background: 'var(--paper)', color: 'var(--ink)', boxShadow: 'none' }}
-          >
-            {copied ? 'Copied' : 'Copy markdown'}
-          </button>
-        </div>
+        <ResultViewer
+          files={files}
+          onDownloadZip={handleDownload}
+          downloadBusy={downloadBusy}
+        />
       )}
 
       <style jsx>{`

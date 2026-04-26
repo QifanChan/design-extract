@@ -10,6 +10,7 @@
 
 import { extractDesignLanguage } from '../../../../src/index.js';
 import { formatMarkdown } from '../../../../src/formatters/markdown.js';
+import { formatDesignMd } from '../../../../src/formatters/design-md.js';
 import { formatTailwind } from '../../../../src/formatters/tailwind.js';
 import { formatCssVars } from '../../../../src/formatters/css-vars.js';
 import { formatPreview } from '../../../../src/formatters/preview.js';
@@ -107,6 +108,7 @@ function buildFiles(design, targetUrl) {
   const dtcgJson = JSON.stringify(dtcg, null, 2);
 
   const files = {
+    [`${prefix}-DESIGN.md`]: formatDesignMd(design),
     [`${prefix}-design-language.md`]: formatMarkdown(design),
     [`${prefix}-design-tokens.json`]: dtcgJson,
     [`${prefix}-tailwind.config.js`]: formatTailwind(design),
