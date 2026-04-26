@@ -294,6 +294,10 @@ export default function ResultViewer({ files, onDownloadZip, downloadBusy }) {
           margin-top: var(--r6);
           border: var(--hair);
           background: var(--paper);
+          /* Force left alignment — the home hero uses text-align: center
+             which would otherwise center each YAML line and push the
+             markdown article into a half-width column. */
+          text-align: left;
         }
         .rv-tabs {
           display: flex;
@@ -400,6 +404,7 @@ export default function ResultViewer({ files, onDownloadZip, downloadBusy }) {
           line-height: 1.65;
           color: var(--ink);
           max-width: 72ch;
+          margin: 0 auto; /* centre the reading column inside the full-width viewer */
         }
         .md-doc :global(.md-front-matter) {
           margin: 0 0 24px;
