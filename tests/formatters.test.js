@@ -720,7 +720,8 @@ describe('formatGrade', () => {
     assert.match(html, /<title>[^<]*Grade B[^<]*<\/title>/);
     assert.ok(html.includes('class="grade-letter">B<'), 'grade letter should be B');
     assert.ok(html.includes('85 / 100'), 'overall score should appear');
-    assert.ok(html.includes('example.com'), 'host should appear');
+    // Anchored within rendered markup; not a URL-origin check (CodeQL js/incomplete-url-substring-sanitization).
+    assert.match(html, />example\.com</, 'host should appear in rendered markup');
   });
 
   it('embeds evidence from the audited design (palette, type, dimensions)', () => {
@@ -800,8 +801,9 @@ describe('formatBattle', () => {
   it('returns a self-contained HTML document with both grades and a verdict', () => {
     const html = formatBattle(mockDesign, designB, { version: '12.2.0' });
     assert.ok(html.startsWith('<!doctype html>'), 'should be a complete HTML document');
-    assert.ok(html.includes('example.com'), 'host A must render');
-    assert.ok(html.includes('other.example.com'), 'host B must render');
+    // Anchored within rendered markup; not a URL-origin check (CodeQL js/incomplete-url-substring-sanitization).
+    assert.match(html, />example\.com</, 'host A must render in markup');
+    assert.match(html, />other\.example\.com</, 'host B must render in markup');
     assert.ok(html.includes('class="grade">B<'), 'grade A=B must render');
     assert.ok(html.includes('class="grade">C<'), 'grade B=C must render');
     assert.ok(/takes it\.|close.* to call/.test(html), 'must include a verdict line');

@@ -43,7 +43,6 @@ import { syncDesign } from '../src/sync.js';
 import { compareBrands, formatBrandMatrix, formatBrandMatrixHtml } from '../src/multibrand.js';
 import { generateClone } from '../src/clone.js';
 import { watchSite } from '../src/watch.js';
-import { diffDarkMode } from '../src/darkdiff.js';
 import { applyDesign } from '../src/apply.js';
 import { formatGrade, formatGradeMarkdown } from '../src/formatters/grade.js';
 import { formatBattle, formatBattleMarkdown } from '../src/formatters/battle.js';
