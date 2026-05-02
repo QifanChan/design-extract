@@ -77,6 +77,8 @@ describe('extractColors', () => {
     makeEl({ tag: 'p', color: 'rgb(102, 102, 102)', backgroundColor: 'rgb(255, 255, 255)' }),
     makeEl({ tag: 'div', area: 100000, backgroundColor: 'rgb(245, 245, 245)', color: 'rgb(0, 0, 0)' }),
     makeEl({ tag: 'footer', area: 80000, backgroundColor: 'rgb(34, 34, 34)', color: 'rgb(200, 200, 200)' }),
+    // Intentional low-contrast text pair for a11y failure detection
+    makeEl({ tag: 'p', color: 'rgb(170, 170, 170)', backgroundColor: 'rgb(255, 255, 255)' }),
   ];
 
   it('returns an object with expected keys', () => {

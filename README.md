@@ -7,6 +7,7 @@
   <a href="https://github.com/Manavarya09/design-extract/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Manavarya09/design-extract?color=0A0908&labelColor=F3F1EA" alt="license"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/designlang?color=0A0908&labelColor=F3F1EA" alt="node version"></a>
   <a href="https://designlang.manavaryasingh.com/"><img src="https://img.shields.io/badge/website-live-FF4800?labelColor=F3F1EA" alt="website"></a>
+
 </p>
 
 ---
@@ -15,303 +16,87 @@
   <img src="designlang.png" alt="designlang in action" width="100%">
 </p>
 
-**designlang** crawls any website with a headless browser, extracts every computed style from the live DOM, and generates **8 output files** — including an AI-optimized markdown file, visual HTML preview, Tailwind config, React theme, shadcn/ui theme, Figma variables, W3C design tokens, and CSS custom properties.
+[![designlang on npm](https://pkgfolio.vercel.app/embed/pkg/designlang?v=2)](https://www.npmjs.com/package/designlang)
 
-But unlike every other tool out there, it also extracts **layout patterns** (grids, flexbox, containers), captures **responsive behavior** across 4 breakpoints, records **interaction states** (hover, focus, active), scores **WCAG accessibility**, and lets you **compare multiple brands** or **sync live sites to local tokens**.
+**designlang** points a headless browser at any URL and reads the design system off the live DOM. One command emits 17+ files — DTCG tokens, Tailwind config, shadcn theme, Figma variables, motion tokens, typed component anatomy, brand voice, page-intent labels, and a paste-ready prompt pack for v0 / Lovable / Cursor / Claude Artifacts.
 
-## Quick Start
+It also goes where extractors don't: **layout patterns**, **responsive behavior across 4 breakpoints**, **hover / focus / active states**, **WCAG contrast scoring**, **multi-page consistency**, **drift checks against a live source-of-truth**, **visual-diffs**, and a **shareable graded report card**.
 
-```bash
-npx designlang https://stripe.com
-```
-
-Get everything at once:
+## Quick start
 
 ```bash
-npx designlang https://stripe.com --full
+npx designlang https://stripe.com                      # extract everything
+npx designlang grade https://stripe.com --badge        # report card + SVG badge  ← v12.2
+npx designlang battle stripe.com vercel.com            # head-to-head graded fight ← v12.2
+npx designlang clone https://stripe.com                # working Next.js starter
+npx designlang --full https://stripe.com               # screenshots + responsive + interactions
 ```
 
-## What You Get (8 Files)
+Drop a live design-score badge in any README:
 
-| File | What it is |
-|------|------------|
-| `*-design-language.md` | AI-optimized markdown — feed it to any LLM to recreate the design |
-| `*-preview.html` | Visual report with swatches, type scale, shadows, a11y score |
-| `*-design-tokens.json` | [W3C Design Tokens](https://design-tokens.github.io/community-group/format/) format |
-| `*-tailwind.config.js` | Drop-in Tailwind CSS theme |
-| `*-variables.css` | CSS custom properties |
-| `*-figma-variables.json` | Figma Variables import (with dark mode support) |
-| `*-theme.js` | React/CSS-in-JS theme (Chakra, Stitches, Vanilla Extract) |
-| `*-shadcn-theme.css` | shadcn/ui globals.css variables |
-
-The markdown output has **19 sections**: Color Palette, Typography, Spacing, Border Radii, Box Shadows, CSS Custom Properties, Breakpoints, Transitions & Animations, Component Patterns (with full CSS snippets), Layout System, Responsive Design, Interaction States, Accessibility (WCAG 2.1), Gradients, Z-Index Map, SVG Icons, Font Files, Image Style Patterns, and Quick Start.
-
-In v7 a companion `*-mcp.json` file is also written alongside the 8 outputs so that `designlang mcp` can serve regions, components, and health data from disk on later invocations. Opting into `--platforms <csv>` additively emits `ios/`, `android/`, `flutter/`, and/or `wordpress-theme/` directories in the output folder, and `--emit-agent-rules` adds a `.cursor/`, `.claude/`, `CLAUDE.md.fragment`, and `agents.md` set.
+```markdown
+![Design Score](https://designlang.app/badge/stripe.com.svg)
+```
 
 ## Install
 
 ```bash
-# Use directly (no install needed)
-npx designlang https://example.com
-
-# Or install globally
-npm install -g designlang
-
-# As an agent skill (Claude Code, Cursor, Codex, 40+ agents)
-npx skills add Manavarya09/design-extract
+npm i -g designlang                         # global
+npx skills add Manavarya09/design-extract   # as an agent skill (40+ agents)
 ```
 
-## What Makes This Different
+## What you get
 
-Most design extraction tools give you colors and fonts. That's it. designlang fills 5 market gaps that no other tool addresses:
+Each run writes 17+ files to `./design-extract-output/`. The headline outputs:
 
-### 1. Layout System Extraction
+| File | What it is |
+|---|---|
+| `*-design-language.md` | 19-section markdown — feed any LLM to recreate the design |
+| `*-design-tokens.json` | W3C DTCG tokens (primitive + semantic + composite layers) |
+| `*-tailwind.config.js` | Drop-in Tailwind theme |
+| `*-shadcn-theme.css` | shadcn/ui `globals.css` variables |
+| `*-figma-variables.json` | Figma Variables import (light + dark) |
+| `*-variables.css` | CSS custom properties |
+| `*-anatomy.tsx` | Typed React stubs for every detected component + variants |
+| `*-motion-tokens.json` | Durations, easings, springs, scroll-linked flag |
+| `*-voice.json` | Brand voice — tone, pronoun posture, CTA verbs |
+| `*-prompts/` | Paste-ready prompts for v0, Lovable, Cursor, Claude Artifacts |
+| `*-mcp.json` | Disk-backed MCP server payload |
+| `*-grade.html` | **v12.1** Shareable Design Report Card (letter grade + evidence) |
+| `*-grade.svg` | **v12.2** Shields.io-style design-score badge (drop into any README) |
+| `*-battle.html` | **v12.2** Head-to-head graded battle card from `designlang battle` |
 
-Extracts the structural skeleton — grid column patterns, flex direction usage, container widths, gap values, and justify/align patterns.
+Multi-platform (`--platforms web,ios,android,flutter,wordpress,all`) adds `ios/`, `android/`, `flutter/`, and a WordPress block theme. `--emit-agent-rules` adds Cursor / Claude Code / generic agent rule files.
 
-```
-Layout: 55 grids, 492 flex containers
-```
+## Why designlang vs anything else
 
-Every other tool gives you the paint. designlang gives you the architecture.
+Other tools give you the paint. designlang reads the architecture:
 
-### 2. Responsive Multi-Breakpoint Capture
-
-Crawls the site at 4 viewports (mobile, tablet, desktop, wide) and maps exactly what changes:
+- **Layout system** — grids, flex containers, container widths, gaps — not just tokens.
+- **Responsive** — crawls 4 breakpoints and reports what changes (`--responsive`).
+- **Interaction states** — programmatically hovers and focuses, captures the deltas (`--interactions`, `--deep-interact`).
+- **Motion language** — durations, easing families, spring detection, scroll-linked flag, `feel` fingerprint (springy / smooth / mechanical / mixed).
+- **Component anatomy** — slot trees with variant × size × state matrices, emitted as typed `.tsx`.
+- **Brand voice** — tone, pronoun posture, heading style, CTA verb inventory.
+- **Page intent + section roles** — `landing` / `pricing` / `docs` etc., with semantic regions (`hero`, `feature-grid`, `pricing-table`, `cta`…).
+- **Multi-page consistency** — auto-discovers canonical pages, reconciles shared vs per-route tokens.
+- **WCAG** — every fg/bg pair scored, with a remediation palette suggesting nearest passing colors.
+- **Drift + lint + visual-diff** — `designlang drift`, `lint`, `visual-diff` all CI-ready, exit non-zero on failure.
+- **Live-site sync** — treat the deployed site as source of truth (`designlang sync`).
+- **MCP server** — `designlang mcp` exposes tokens, regions, components, and contrast pairs to any MCP-aware agent.
 
 ```bash
-designlang https://vercel.com --responsive
+designlang grade https://stripe.com         # ← v12.1: shareable report card
+designlang clone https://stripe.com         # → working Next.js app
+designlang apply https://stripe.com -d ./app   # auto-detect framework, write tokens
+designlang brands stripe.com vercel.com linear.app   # N-brand matrix
+designlang drift https://yourapp.com --tokens ./src/tokens.json
+designlang lint ./src/tokens/design-tokens.json     # CI-ready linter
+designlang visual-diff https://staging.app https://app   # single-file HTML diff
+designlang mcp                              # stdio MCP server for Cursor / Claude Code
 ```
 
-```
-Responsive: 4 viewports, 3 breakpoint changes
-  375px → 768px: Nav visibility hidden → visible, Hamburger shown → hidden
-  768px → 1280px: Max grid columns 1 → 3, H1 size 32px → 48px
-```
-
-No other tool captures how the design *adapts*, just how it looks at one size.
-
-### 3. Interaction State Capture
-
-Programmatically hovers and focuses interactive elements, capturing the actual style transitions:
-
-```bash
-designlang https://stripe.com --interactions
-```
-
-```css
-/* Button Hover */
-background-color: rgb(83, 58, 253) → rgb(67, 47, 202);
-box-shadow: none → 0 4px 12px rgba(83, 58, 253, 0.4);
-
-/* Input Focus */
-border-color: rgb(200, 200, 200) → rgb(83, 58, 253);
-outline: none → 2px solid rgb(83, 58, 253);
-```
-
-### 4. Live Site Sync
-
-Treat the deployed site as your source of truth, not Figma:
-
-```bash
-designlang sync https://stripe.com --out ./src/tokens
-```
-
-Detects design changes and auto-updates your local `design-tokens.json`, `tailwind.config.js`, and `variables.css`.
-
-### 5. Multi-Brand Comparison
-
-Compare N brands side-by-side:
-
-```bash
-designlang brands stripe.com vercel.com github.com linear.app
-```
-
-Generates a matrix with color overlap analysis, typography comparison, spacing systems, and accessibility scores. Outputs both `brands.md` and `brands.html`.
-
-### 6. Clone Command
-
-Generate a working Next.js app with the extracted design applied:
-
-```bash
-designlang clone https://stripe.com
-cd cloned-design && npm install && npm run dev
-```
-
-One command → a running app with the site's colors, fonts, spacing, and component patterns.
-
-### 7. Design System Scoring
-
-Rate any site's design quality across 7 categories:
-
-```bash
-designlang score https://vercel.com
-```
-
-```
-  68/100  Grade: D
-
-  Color Discipline     ██████████░░░░░░░░░░ 50
-  Typography           ██████████████░░░░░░ 70
-  Spacing System       ████████████████░░░░ 80
-  Shadows              ██████████░░░░░░░░░░ 50
-  Border Radii         ████████░░░░░░░░░░░░ 40
-  Accessibility        ███████████████████░ 94
-  Tokenization         ████████████████████ 100
-```
-
-### 8. Watch Mode
-
-Monitor a site for design changes:
-
-```bash
-designlang watch https://stripe.com --interval 60
-```
-
-Checks hourly and alerts when colors, fonts, or accessibility scores change.
-
-### 9. Apply Command (NEW in v5)
-
-Extract a site's design and write tokens directly into your project — auto-detects your framework:
-
-```bash
-designlang apply https://stripe.com --dir ./my-app
-```
-
-Detects Tailwind, shadcn/ui, or plain CSS and writes to the right config files automatically.
-
-### 10. Auth Extraction (NEW in v5)
-
-Extract from authenticated or protected pages with cookies and custom headers:
-
-```bash
-designlang https://internal-app.com --cookie "session=abc123" --header "Authorization:Bearer token"
-```
-
-### 11. Gradient Extraction (NEW in v5)
-
-Detects all CSS gradients — type (linear/radial/conic), direction, color stops, and classifies them as subtle, brand, bold, or complex.
-
-### 12. Z-Index Map (NEW in v5)
-
-Builds a layer hierarchy from all z-index values, groups them into layers (base, sticky, dropdown, modal, etc.), and flags z-index wars or excessive values (>9999).
-
-### 13. SVG Icon Extraction (NEW in v5)
-
-Finds and deduplicates all inline SVGs, classifies them by size and style (outline/solid/duotone), and extracts the icon color palette.
-
-### 14. Font File Detection (NEW in v5)
-
-Identifies every font source — Google Fonts, self-hosted, CDN, or system — and generates ready-to-use `@font-face` CSS.
-
-### 15. Image Style Patterns (NEW in v5)
-
-Detects image aspect ratios, border treatments, filters, and classifies patterns like avatar, hero, thumbnail, and gallery.
-
-### 16. Dark Mode Diffing (NEW in v5)
-
-Compare light and dark mode side-by-side — see exactly which colors change and which CSS variables are overridden:
-
-```bash
-designlang https://vercel.com --dark
-```
-
-### 17. MCP Server (NEW in v7)
-
-One-command integration with any MCP-aware AI agent (Cursor, Claude Code, Windsurf, and more):
-
-```bash
-designlang mcp --output-dir ./design-extract-output
-```
-
-Launches a stdio JSON-RPC server that exposes the extracted design as MCP resources and tools.
-
-**Resources:**
-
-- `designlang://tokens/primitive` — primitive token layer
-- `designlang://tokens/semantic` — semantic token layer (with DTCG alias references)
-- `designlang://regions` — classified page regions (nav, hero, pricing, etc.)
-- `designlang://components` — reusable component clusters with variants
-- `designlang://health` — CSS health audit
-
-**Tools:**
-
-- `search_tokens` — query tokens by name, value, or type
-- `find_nearest_color` — snap any color to the nearest palette token
-- `get_region` — fetch a classified region by name
-- `get_component` — fetch a component cluster by id
-- `list_failing_contrast_pairs` — list every WCAG-failing fg/bg pair with remediation suggestions
-
-### 18. Multi-Platform Output (NEW in v7)
-
-Emit iOS SwiftUI, Android Compose, Flutter, and WordPress block-theme files in a single run, in addition to the default web output:
-
-```bash
-designlang https://stripe.com --platforms all
-```
-
-Resulting tree:
-
-```
-design-extract-output/
-├── stripe-com-*.{md,json,css,js,html}    (default web output)
-├── ios/
-│   └── DesignTokens.swift
-├── android/
-│   ├── Theme.kt
-│   ├── colors.xml
-│   └── dimens.xml
-├── flutter/
-│   └── design_tokens.dart               (+ buildDesignlangTheme())
-└── wordpress-theme/
-    ├── theme.json
-    ├── style.css
-    ├── functions.php
-    ├── index.php
-    └── templates/index.html
-```
-
-Values for `--platforms` are any comma-separated subset of `web,ios,android,flutter,wordpress,all`. The flag is additive — the default web output is always emitted.
-
-### 19. Agent Rules Emitter (NEW in v7)
-
-Write agent-facing rule files generated from the resolved semantic tokens:
-
-```bash
-designlang https://stripe.com --emit-agent-rules
-```
-
-Writes:
-
-- `.cursor/rules/designlang.mdc` — Cursor rule
-- `.claude/skills/designlang/SKILL.md` — Claude Code skill
-- `CLAUDE.md.fragment` — snippet you can paste into your project's CLAUDE.md
-- `agents.md` — generic, vendor-neutral agent guidance
-
-Each file is templated from the semantic layer of the extracted token set, so the agent sees real token names and values — not placeholders.
-
-### 20. Stack + Tailwind Fingerprint (NEW in v7)
-
-Automatic framework, utility-class, and analytics detection surfaced on `design.stack`:
-
-- **Framework**: Next.js, Nuxt, Gatsby, Remix, Astro, Shopify, WordPress, Framer, Webflow, and more.
-- **Tailwind**: when Tailwind is in use, records utility-class frequency so you see which utilities drive the design.
-- **Analytics**: inventory of analytics scripts — GA4, Plausible, PostHog, Segment, Mixpanel, Amplitude, and friends.
-
-### 21. CSS Health Audit (NEW in v7)
-
-A dedicated audit pass surfaced on `design.cssHealth`:
-
-- Specificity graph (distribution, hotspots)
-- `!important` count
-- Duplicate declarations
-- Unused CSS via the Playwright Coverage API
-- `@keyframes` catalog
-- Vendor-prefix audit
-
-Also contributes a `cssHealth` dimension to the overall design score.
-
-## All Features
+## All features
 
 | Feature | Flag / Command | Description |
 |---------|---------------|-------------|
@@ -325,15 +110,22 @@ Also contributes a `cssHealth` dimension to the overall design score.
 | Font files | automatic | Source detection (Google/self-hosted/CDN/system), @font-face CSS |
 | Image styles | automatic | Aspect ratios, shapes, filters, pattern classification |
 | Dark mode | `--dark` | Extracts dark color scheme + light/dark diff |
-| Auth pages | `--cookie`, `--header` | Extract from authenticated/protected pages |
-| Multi-page | `--depth <n>` | Crawl N internal pages for site-wide tokens |
+| Auth pages | `--cookie`, `--cookie-file`, `--header` | Extract from authenticated/protected pages; cookie files in JSON / Playwright storageState / Netscape formats |
+| Self-signed / dev TLS | `--insecure` | Ignore HTTPS/SSL certificate errors |
+| User-Agent override | `--user-agent <ua>` | Set a custom User-Agent string |
+| Chrome extension | `chrome-extension/` | One-click handoff from any tab, MV3, `activeTab` only |
+| Multi-page | `--depth <n>` | Crawl N internal pages; emits shared-vs-per-route token reconciliation (`*-tokens-shared.json`, `*-tokens-routes/<slug>.json`, `*-routes-report.md`) |
 | Screenshots | `--screenshots` | Capture buttons, cards, inputs, nav, hero, full page |
 | Responsive | `--responsive` | Crawl at 4 viewports, map breakpoint changes |
 | Interactions | `--interactions` | Capture hover/focus/active state transitions |
-| Everything | `--full` | Enable screenshots + responsive + interactions |
+| Auto-interact | `--deep-interact` | Scroll, open menus/modals/accordions, hover CTAs before extraction |
+| Everything | `--full` | Enable screenshots + responsive + interactions + deep-interact |
 | Apply | `designlang apply <url>` | Auto-detect framework and write tokens to your project |
 | Clone | `designlang clone <url>` | Generate a working Next.js starter with extracted design |
 | Score | `designlang score <url>` | Rate design quality with visual bar chart breakdown |
+| Grade (v12.1) | `designlang grade <url>` | Shareable HTML "Design Report Card" — letter grade, 8 dimensions, evidence, strengths + fixes |
+| Battle (NEW v12.2) | `designlang battle <A> <B>` | Head-to-head graded battle card with verdict, dimension table, palette comparison |
+| Badge (NEW v12.2) | `designlang grade --badge` | Shields.io-style SVG badge — `design · B · 87` — drop into any README. Live endpoint: `designlang.app/badge/<host>.svg` |
 | Watch | `designlang watch <url>` | Monitor for design changes on interval |
 | Diff | `designlang diff <A> <B>` | Compare two sites (MD + HTML) |
 | Multi-brand | `designlang brands <urls...>` | N-site comparison matrix |
@@ -365,9 +157,16 @@ Options:
   --screenshots           Capture component screenshots
   --responsive            Capture at multiple breakpoints
   --interactions          Capture hover/focus/active states
-  --full                  Enable all captures
+  --deep-interact         Auto-interact pass (scroll, menus, modals, accordions, hover CTAs)
+  --full                  Enable all captures (implies --deep-interact)
   --cookie <cookies...>   Cookies for authenticated pages (name=value)
+  --cookie-file <path>    Load cookies from JSON / storageState / Netscape cookies.txt
   --header <headers...>   Custom headers (name:value)
+  --user-agent <ua>       Override the browser User-Agent string
+  --insecure              Ignore HTTPS/SSL certificate errors (self-signed, dev, proxies)
+  --selector <css>        Only extract from elements matching this CSS selector (e.g. ".pricing-card")
+  --system-chrome         Use the system Chrome install instead of the bundled Chromium (skips 150MB download)
+  --json                  Print full extraction as JSON to stdout (for piping into other tools)
   --framework <type>      Only generate specific theme (react, shadcn)
   --platforms <csv>       Additional platforms: web,ios,android,flutter,wordpress,all (additive)
   --emit-agent-rules      Emit Cursor / Claude Code / CLAUDE.md / agents.md rule files
@@ -376,69 +175,58 @@ Options:
   --verbose               Detailed progress output
 
 Commands:
-  apply <url>             Extract and apply design directly to your project
-  clone <url>             Generate a working Next.js starter from extracted design
-  score <url>             Rate design quality (7 categories, A-F, bar chart)
-  watch <url>             Monitor for design changes on interval
-  diff <urlA> <urlB>      Compare two sites' design languages
-  brands <urls...>        Multi-brand comparison matrix
-  sync <url>              Sync local tokens with live site
-  history <url>           View design change history
-  mcp                     Launch stdio MCP server (--output-dir <dir>)
+  apply <url>                       Extract and apply design directly to your project
+  clone <url>                       Generate a working Next.js starter from extracted design
+  score <url>                       Rate design quality (7 categories, A-F, bar chart)
+  grade <url>                       Generate a shareable HTML Design Report Card (--format html|md|json|svg|all, --badge, --open)
+  battle <urlA> <urlB>              Head-to-head graded battle card (--format html|md|json|all, --open)
+  watch <url>                       Monitor for design changes on interval
+  diff <urlA> <urlB>                Compare two sites' design languages
+  brands <urls...>                  Multi-brand comparison matrix
+  sync <url>                        Sync local tokens with live site
+  history <url>                     View design change history
+  mcp                               Launch stdio MCP server (--output-dir <dir>)
+  lint <file>                       (v9) Audit a local token file (.json/.css) — CI-ready
+  drift <url> --tokens <file>       (v9) Check local tokens for drift against a live site
+  visual-diff <before> <after>      (v9) Side-by-side HTML diff of two URLs
 ```
 
-## Example Output
+## Example output
 
-Running `designlang https://vercel.com --full`:
+`designlang https://vercel.com --full` →
 
 ```
-  designlang
-  https://vercel.com
+Colors: 27 · Fonts: Geist + Geist Mono · Spacing: 18 (base 2px)
+Shadows: 11 · Radii: 10 · CSS vars: 407 · Layout: 55 grids / 492 flex
+Responsive: 4 viewports, 3 breakpoint changes · Interactions: 8 transitions
+A11y: 94% WCAG · Score: 68/100 (D) · 4 issues
 
-  Output files:
-  ✓ vercel-com-design-language.md (32.6KB)
-  ✓ vercel-com-design-tokens.json (5.6KB)
-  ✓ vercel-com-tailwind.config.js (3.4KB)
-  ✓ vercel-com-variables.css (18.6KB)
-  ✓ vercel-com-preview.html (31.8KB)
-  ✓ vercel-com-figma-variables.json (12.4KB)
-  ✓ vercel-com-theme.js (1.4KB)
-  ✓ vercel-com-shadcn-theme.css (477B)
-  ✓ screenshots/button.png
-  ✓ screenshots/card.png
-  ✓ screenshots/nav.png
-  ✓ screenshots/hero.png
-  ✓ screenshots/full-page.png
-
-  Summary:
-  Colors: 27 unique colors
-  Fonts: Geist, Geist Mono
-  Spacing: 18 values (base: 2px)
-  Shadows: 11 unique shadows
-  Radii: 10 unique values
-  Breakpoints: 45 breakpoints
-  Components: 11 types detected (with CSS snippets)
-  CSS Vars: 407 custom properties
-  Layout: 55 grids, 492 flex containers
-  Gradients: 4 unique gradients
-  Z-Index: 8 layers mapped
-  Icons: 23 unique SVGs
-  Font Files: 4 font sources detected
-  Images: 6 style patterns
-  Responsive: 4 viewports, 3 breakpoint changes
-  Interactions: 8 state changes captured
-  A11y: 94% WCAG score (7 failing pairs)
-  Design Score: 68/100 (D) — 4 issues
+→ 17 files written to ./design-extract-output/
+→ Run `designlang grade https://vercel.com` for a shareable report card
 ```
 
-## How It Works
+## How it works
 
-1. **Crawl** — Launches headless Chromium via Playwright, waits for network idle and fonts
-2. **Extract** — Single `page.evaluate()` walks up to 5,000 DOM elements collecting 25+ computed style properties, layout data, inline SVGs, font sources, and image metadata
-3. **Process** — 17 extractor modules parse, deduplicate, cluster, and classify the raw data (including gradients, z-index layers, icons, fonts, and image patterns)
-4. **Format** — 8 formatter modules generate output files
+1. **Crawl** — Headless Chromium via Playwright, waits for network idle and fonts
+2. **Extract** — One `page.evaluate()` walks up to 5,000 DOM elements, collecting 25+ computed properties, inline SVGs, font sources, and image metadata
+3. **Process** — 17 extractor modules parse, deduplicate, cluster, and classify the raw data
+4. **Format** — 12+ formatter modules emit the output files
 5. **Score** — Accessibility extractor calculates WCAG contrast ratios for all color pairs
 6. **Capture** — Optional: screenshots, responsive viewport crawling, interaction state recording
+
+## Install Everywhere
+
+designlang ships surfaces beyond the CLI:
+
+| Surface | Path | Description |
+|---------|------|-------------|
+| **CLI** | `npx designlang <url>` | Main entry point. |
+| **VS Code extension** | [`vscode-extension/`](vscode-extension/) | "Extract design from URL" command + auto-inject into workspace. |
+| **Raycast extension** | [`raycast-extension/`](raycast-extension/) | Extract, score, and "copy CLI command" from Raycast. |
+| **Figma plugin** | [`figma-plugin/`](figma-plugin/) | Paste a URL inside Figma, get a full Variables collection. |
+| **GitHub Action** | [`github-action/`](github-action/) | "Design regression guard" — diffs tokens on every PR and comments. |
+| **Chrome extension** | [`chrome-extension/`](chrome-extension/) | One-click handoff from any tab (MV3, `activeTab` only). |
+| **MCP server** | `npx designlang mcp` | Exposes the extracted design as MCP resources + tools for Cursor, Claude Code, Windsurf, etc. See [`docs/MCP-REGISTRY.md`](docs/MCP-REGISTRY.md). |
 
 ## Agent Skill
 
@@ -452,7 +240,7 @@ In Claude Code, use `/extract-design <url>`.
 
 ## Website
 
-**[design-extract-beta.vercel.app](https://design-extract-beta.vercel.app)** — the brutalist product page.
+**[https://designlang.manavaryasingh.com](https://designlang.manavaryasingh.com/)** — the brutalist product page.
 
 ## Contributing
 
@@ -461,3 +249,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). PRs welcome!
 ## License
 
 [MIT](LICENSE) - Manav Arya Singh
+
+

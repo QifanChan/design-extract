@@ -1,7 +1,7 @@
 {
   "name": "designlang",
-  "version": "7.0.0",
-  "description": "Extract the complete design language from any website — colors, typography, spacing, shadows, and more. Outputs AI-optimized markdown, W3C design tokens, Tailwind config, and CSS variables.",
+  "version": "12.2.0",
+  "description": "Extract the complete design language from any website and ship it — clone to a working Next.js starter, guard tokens with a CI drift bot, or browse everything in a local studio. Outputs W3C DTCG tokens, motion tokens, typed anatomy stubs, Tailwind config, and ready-to-paste v0 / Lovable / Cursor / Claude-Artifacts prompts.",
   "type": "module",
   "bin": {
     "designlang": "./bin/design-extract.js"
@@ -38,7 +38,13 @@
     "vue",
     "svelte",
     "json",
-    "ci-cd"
+    "ci-cd",
+    "motion",
+    "animation",
+    "component-anatomy",
+    "brand-voice",
+    "token-lint",
+    "visual-diff"
   ],
   "author": "masyv",
   "license": "MIT"

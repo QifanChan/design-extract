@@ -21,6 +21,24 @@ import { extractCssHealth } from './extractors/css-health.js';
 import { remediateFailingPairs } from './extractors/a11y-remediation.js';
 import { extractSemanticRegions } from './extractors/semantic-regions.js';
 import { clusterComponents } from './extractors/component-clusters.js';
+import { extractModernCss } from './extractors/modern-css.js';
+import { extractWideGamut } from './extractors/wide-gamut.js';
+import { extractTokenSources } from './extractors/token-sources.js';
+import { extractInteractionStates } from './extractors/interaction-states.js';
+import { extractMotion } from './extractors/motion.js';
+import { extractComponentAnatomy } from './extractors/component-anatomy.js';
+import { extractVoice } from './extractors/voice.js';
+import { extractPageIntent } from './extractors/page-intent.js';
+import { extractSectionRoles } from './extractors/section-roles.js';
+import { extractComponentLibrary } from './extractors/component-library.js';
+import { extractMaterialLanguage } from './extractors/material-language.js';
+import { extractImageryStyle } from './extractors/imagery-style.js';
+import { extractSeo } from './extractors/seo.js';
+import { extractIconSystem } from './extractors/icon-system.js';
+import { extractBackgroundPatterns } from './extractors/background-patterns.js';
+import { extractStackIntel } from './extractors/stack-intel.js';
+import { extractFormStates } from './extractors/form-states.js';
+import { formatDtcgTokens } from './formatters/dtcg-tokens.js';
 
 function safeExtract(fn, ...args) {
   try { return fn(...args); } catch { return null; }
@@ -30,6 +48,7 @@ export async function extractDesignLanguage(url, options = {}) {
   const rawData = await crawlPage(url, {
     ...options,
     ignore: options.ignore,
+    deepInteract: options.deepInteract,
   });
   const styles = rawData.light.computedStyles;
   const warnings = [];
@@ -63,6 +82,13 @@ export async function extractDesignLanguage(url, options = {}) {
     cssHealth: safeExtract(extractCssHealth, rawData.light.cssCoverage) || null,
     regions: safeExtract(extractSemanticRegions, rawData.light.sections) || [],
     componentClusters: safeExtract(clusterComponents, rawData.light.componentCandidates) || [],
+    modernCss: safeExtract(extractModernCss, rawData) || { pseudoElements: { count: 0, samples: [] }, variableFonts: { count: 0, axes: [] }, openTypeFeatures: [], textWrap: { wrap: [], decorationStyle: [], decorationThickness: [], underlineOffset: [] }, containerQueries: { count: 0, rules: [] }, envUsage: [] },
+    wideGamut: safeExtract(extractWideGamut, rawData.light.modernColors || []) || { oklch: { count: 0, samples: [] }, oklab: { count: 0, samples: [] }, colorMix: { count: 0, samples: [] }, lightDark: { count: 0, samples: [] }, displayP3: { count: 0, samples: [] }, rec2020: { count: 0, samples: [] }, totalCount: 0 },
+    tokenSources: [],
+    interactionStates: safeExtract(extractInteractionStates, rawData.interactState || rawData.light.interactState) || { scrollSettled: false, menusOpened: 0, hover: { sampled: 0, changed: 0, deltas: [] }, accordionsOpened: 0, modals: [] },
+    motion: safeExtract(extractMotion, styles, rawData.light.keyframes) || { durations: [], easings: [], springs: [], keyframes: [], scrollLinked: { present: false, signals: [] }, stats: {}, feel: 'unknown' },
+    componentAnatomy: safeExtract(extractComponentAnatomy, rawData.light.componentCandidates) || [],
+    voice: safeExtract(extractVoice, { componentCandidates: rawData.light.componentCandidates, sections: rawData.light.sections }) || { tone: 'neutral', ctaVerbs: [], buttonPatterns: [], sampleHeadings: [] },
     score: null,
   };
 
@@ -106,6 +132,41 @@ export async function extractDesignLanguage(url, options = {}) {
     };
   } catch { /* non-fatal */ }
 
+  design.tokenSources = safeExtract(extractTokenSources, design, styles) || [];
+
+  // v10: page intent, section roles, component library, material language,
+  // imagery style. All additive — no existing field is modified.
+  design.pageIntent = safeExtract(extractPageIntent, rawData, { url: rawData.url, title: rawData.title }) || { type: 'unknown', confidence: 0, signals: [] };
+  design.sectionRoles = safeExtract(extractSectionRoles, rawData.light?.sections || [], design.regions, design.pageIntent) || { sections: [], counts: {}, readingOrder: [] };
+  design.componentLibrary = safeExtract(extractComponentLibrary, rawData.light?.stack || {}) || { library: 'unknown', confidence: 0, evidence: [], alternates: [] };
+  design.materialLanguage = safeExtract(extractMaterialLanguage, design) || { label: 'flat', confidence: 0, signals: [], metrics: {} };
+  design.imageryStyle = safeExtract(extractImageryStyle, rawData.light?.images || []) || { label: 'none', confidence: 0, counts: {}, signals: [] };
+  design.seo = safeExtract(extractSeo, rawData) || { openGraph: {}, twitter: {}, structuredData: [], score: {} };
+  design.iconSystem = safeExtract(extractIconSystem, rawData.light?.icons || []) || { library: 'unknown', confidence: 0, stats: {}, signals: [], icons: [] };
+  design.backgroundPatterns = safeExtract(extractBackgroundPatterns, rawData) || { labels: ['plain'], counts: {}, gradientTotals: {}, samples: [] };
+  design.stackIntel = safeExtract(extractStackIntel, rawData.light?.stack || {}) || { cms: [], analytics: [], experimentation: [] };
+  design.formStates = safeExtract(extractFormStates, rawData, design) || { flags: [], forms: { count: 0, families: [] }, modals: [], toastLibraries: [] };
+  // Stash raw crawler output so downstream orchestration (multipage, smart)
+  // can rebuild the digest without re-crawling.
+  design._raw = rawData;
+
+  // Per-route token extraction (Tier 2 multi-page reconciliation).
+  if (Array.isArray(rawData.routes) && rawData.routes.length > 0) {
+    design.routes = rawData.routes.map(r => {
+      const rStyles = r.computedStylesSample || [];
+      const rDesign = {
+        meta: { url: r.url },
+        colors: safeExtract(extractColors, rStyles) || { all: [], neutrals: [], backgrounds: [], text: [], gradients: [] },
+        typography: safeExtract(extractTypography, rStyles) || { families: [], scale: [] },
+        spacing: safeExtract(extractSpacing, rStyles) || { scale: [], base: null },
+        shadows: safeExtract(extractShadows, rStyles) || { values: [] },
+        borders: safeExtract(extractBorders, rStyles) || { radii: [] },
+      };
+      const tokens = safeExtract(formatDtcgTokens, rDesign) || { primitive: {}, semantic: {} };
+      return { url: r.url, path: r.path, tokens };
+    });
+  }
+
   design.score = safeExtract(scoreDesignSystem, design);
   if (design.score === null) warnings.push('scoring failed');
 
@@ -136,3 +197,29 @@ export { watchSite } from './watch.js';
 export { diffDarkMode } from './darkdiff.js';
 export { applyDesign } from './apply.js';
 export { loadConfig, mergeConfig } from './config.js';
+export { extractMotion } from './extractors/motion.js';
+export { formatMotionTokens } from './formatters/motion-tokens.js';
+export { extractComponentAnatomy, formatAnatomyStubs } from './extractors/component-anatomy.js';
+export { extractVoice } from './extractors/voice.js';
+export { lintTokens } from './lint.js';
+export { checkDrift, formatDriftMarkdown } from './drift.js';
+export { visualDiff, formatVisualDiffHtml } from './visual-diff.js';
+// v10
+export { extractPageIntent } from './extractors/page-intent.js';
+export { extractSectionRoles } from './extractors/section-roles.js';
+export { extractComponentLibrary } from './extractors/component-library.js';
+export { extractMaterialLanguage } from './extractors/material-language.js';
+export { extractImageryStyle } from './extractors/imagery-style.js';
+export { extractLogo } from './extractors/logo.js';
+export { captureComponentScreenshotsV10 } from './extractors/component-screenshots.js';
+export { pairDarkMode } from './extractors/dark-mode-pair.js';
+export { captureResponsiveScreenshots } from './extractors/responsive-screenshots.js';
+export { captureCoreWebVitals, extractFontLoading } from './extractors/perf.js';
+export { extractSeo } from './extractors/seo.js';
+export { extractIconSystem } from './extractors/icon-system.js';
+export { extractBackgroundPatterns } from './extractors/background-patterns.js';
+export { extractStackIntel } from './extractors/stack-intel.js';
+export { extractFormStates } from './extractors/form-states.js';
+export { refineWithSmart } from './classifiers/smart.js';
+export { crawlCanonicalPages, computeCrossPageConsistency, discoverCanonicalPages } from './multipage.js';
+export { buildPromptPack, formatV0Prompt, formatLovablePrompt, formatCursorPrompt, formatClaudeArtifactPrompt } from './formatters/prompt-pack.js';

@@ -14,6 +14,9 @@ import { formatAndroidCompose } from '../src/formatters/android-compose.js';
 import { formatFlutterDart } from '../src/formatters/flutter-dart.js';
 import { formatWordPressTheme } from '../src/formatters/wordpress.js';
 import { formatAgentRules } from '../src/formatters/agent-rules.js';
+import { formatGrade, formatGradeMarkdown } from '../src/formatters/grade.js';
+import { formatBattle, formatBattleMarkdown, compareScores } from '../src/formatters/battle.js';
+import { formatBadge, formatScoreBadge } from '../src/formatters/badge.js';
 
 // ── Shared mock design object ───────────────────────────────────
 
@@ -705,5 +708,172 @@ describe('formatAgentRules', () => {
       assert.ok(out[key].toLowerCase().includes('#0066cc'), `${key} missing resolved hex`);
       assert.ok(!out[key].includes('{primitive.color.brand.primary}'), `${key} leaked raw DTCG ref`);
     }
+  });
+});
+
+// ── formatGrade (Design Report Card) ───────────────────────────
+
+describe('formatGrade', () => {
+  it('returns a self-contained HTML document with the grade letter and score', () => {
+    const html = formatGrade(mockDesign, { version: '12.1.0' });
+    assert.ok(html.startsWith('<!doctype html>'), 'should be a complete HTML document');
+    assert.match(html, /<title>[^<]*Grade B[^<]*<\/title>/);
+    assert.ok(html.includes('class="grade-letter">B<'), 'grade letter should be B');
+    assert.ok(html.includes('85 / 100'), 'overall score should appear');
+    // Anchored within rendered markup; not a URL-origin check (CodeQL js/incomplete-url-substring-sanitization).
+    assert.match(html, />example\.com</, 'host should appear in rendered markup');
+  });
+
+  it('embeds evidence from the audited design (palette, type, dimensions)', () => {
+    const html = formatGrade(mockDesign);
+    assert.ok(html.includes('#0066cc'), 'palette swatch hex must render');
+    assert.ok(html.includes('Color Discipline'), 'dimension label must render');
+    assert.ok(html.includes('Tight, disciplined color palette'), 'strength must render');
+    assert.ok(html.includes('No CSS custom properties found'), 'issue must render');
+  });
+
+  it('escapes user-controlled content to prevent HTML injection', () => {
+    const malicious = { ...mockDesign, meta: { ...mockDesign.meta, title: '<script>alert(1)</script>' } };
+    const html = formatGrade(malicious);
+    assert.ok(!html.includes('<script>alert(1)'), 'script tag must be escaped');
+    assert.ok(html.includes('&lt;script&gt;'), 'should contain escaped form');
+  });
+
+  it('handles typography scale entries shaped as objects ({size, weight, ...})', () => {
+    // Real extractor output is objects with .size, not raw numbers.
+    const html = formatGrade(mockDesign);
+    assert.ok(!html.includes('font-size:NaN'), 'must not produce NaN sizes');
+    assert.ok(!html.includes('[object Object]'), 'must resolve object→number');
+  });
+
+  it('throws a clear error when score is missing', () => {
+    const noScore = { ...mockDesign, score: null };
+    assert.throws(() => formatGrade(noScore), /score missing/);
+  });
+});
+
+describe('formatGradeMarkdown', () => {
+  it('produces a markdown report with grade, dimensions table, strengths, and fixes', () => {
+    const md = formatGradeMarkdown(mockDesign);
+    assert.match(md, /^# Design Report Card/m);
+    assert.match(md, /\*\*Grade B\*\* · 85\/100/);
+    assert.match(md, /\| Dimension \| Score \| Verdict \|/);
+    assert.match(md, /## Strengths/);
+    assert.match(md, /## What to fix/);
+    assert.match(md, /designlang/);
+  });
+});
+
+// ── compareScores (battle internals) ────────────────────────────
+
+describe('compareScores', () => {
+  const a = { overall: 90, scores: { colorDiscipline: 90, typographyConsistency: 80, accessibility: 70 } };
+  const b = { overall: 75, scores: { colorDiscipline: 70, typographyConsistency: 82, accessibility: 70 } };
+
+  it('counts wins per side using a 3-point gap threshold', () => {
+    const cmp = compareScores(a, b);
+    assert.equal(cmp.aWins, 1, 'a wins on color (90 vs 70 → +20)');
+    assert.equal(cmp.bWins, 0);
+    assert.equal(cmp.ties, 2, 'typography (80 vs 82, gap=-2) and a11y (70 vs 70) both within 3');
+    assert.equal(cmp.verdict, 'a', 'overall delta is +15 → a wins');
+  });
+
+  it('returns tie when overall deltas are within 3 points', () => {
+    const aClose = { overall: 80, scores: { colorDiscipline: 80 } };
+    const bClose = { overall: 78, scores: { colorDiscipline: 80 } };
+    assert.equal(compareScores(aClose, bClose).verdict, 'tie');
+  });
+
+  it('skips dimensions missing on either side', () => {
+    const aPartial = { overall: 80, scores: { colorDiscipline: 80 } };
+    const bPartial = { overall: 80, scores: { typographyConsistency: 80 } };
+    assert.equal(compareScores(aPartial, bPartial).rows.length, 0);
+  });
+});
+
+// ── formatBattle (head-to-head HTML) ────────────────────────────
+
+describe('formatBattle', () => {
+  const designB = JSON.parse(JSON.stringify(mockDesign));
+  designB.meta = { ...designB.meta, url: 'https://other.example.com', title: 'Other Site' };
+  designB.score = { ...mockDesign.score, overall: 70, grade: 'C', scores: { ...mockDesign.score.scores, colorDiscipline: 60 } };
+
+  it('returns a self-contained HTML document with both grades and a verdict', () => {
+    const html = formatBattle(mockDesign, designB, { version: '12.2.0' });
+    assert.ok(html.startsWith('<!doctype html>'), 'should be a complete HTML document');
+    // Anchored within rendered markup; not a URL-origin check (CodeQL js/incomplete-url-substring-sanitization).
+    assert.match(html, />example\.com</, 'host A must render in markup');
+    assert.match(html, />other\.example\.com</, 'host B must render in markup');
+    assert.ok(html.includes('class="grade">B<'), 'grade A=B must render');
+    assert.ok(html.includes('class="grade">C<'), 'grade B=C must render');
+    assert.ok(/takes it\.|close.* to call/.test(html), 'must include a verdict line');
+  });
+
+  it('uses paddings + bars for both sides (no NaN, both colors present)', () => {
+    const html = formatBattle(mockDesign, designB);
+    assert.ok(!html.includes('NaN'), 'no NaN math');
+    assert.ok(html.includes('bar-a') && html.includes('bar-b'), 'both bar classes render');
+  });
+
+  it('throws a clear error when either design is missing a score', () => {
+    const noScore = { ...mockDesign, score: null };
+    assert.throws(() => formatBattle(noScore, designB), /score/i);
+    assert.throws(() => formatBattle(mockDesign, noScore), /score/i);
+  });
+});
+
+describe('formatBattleMarkdown', () => {
+  const designB = JSON.parse(JSON.stringify(mockDesign));
+  designB.meta = { ...designB.meta, url: 'https://other.example.com' };
+  designB.score = { ...mockDesign.score, overall: 70, grade: 'C' };
+
+  it('emits a battle table with overall row and per-dimension rows', () => {
+    const md = formatBattleMarkdown(mockDesign, designB);
+    assert.match(md, /^# example\.com vs other\.example\.com/m);
+    assert.match(md, /\*\*Verdict:\*\* example\.com wins/);
+    assert.match(md, /\*\*Overall\*\* \| 85 \(B\) \| 70 \(C\)/);
+    assert.match(md, /\| Color \|/);
+  });
+});
+
+// ── formatBadge / formatScoreBadge ──────────────────────────────
+
+describe('formatBadge', () => {
+  it('returns valid SVG with both label and value sections', () => {
+    const svg = formatBadge({ label: 'design', value: 'B · 87', grade: 'B' });
+    assert.ok(svg.startsWith('<svg'), 'must be SVG');
+    assert.ok(svg.includes('xmlns="http://www.w3.org/2000/svg"'));
+    assert.ok(svg.includes('design'), 'label must render');
+    assert.ok(svg.includes('B · 87'), 'value must render');
+    assert.match(svg, /role="img"/);
+    assert.match(svg, /aria-label="design: B · 87"/);
+  });
+
+  it('picks color from grade letter', () => {
+    assert.match(formatBadge({ value: 'A', grade: 'A' }), /#0a8a52/);
+    assert.match(formatBadge({ value: 'F', grade: 'F' }), /#c43d3d/);
+  });
+
+  it('escapes user-controlled text', () => {
+    const svg = formatBadge({ label: '<script>', value: '"&\'' });
+    assert.ok(!svg.includes('<script>'));
+    assert.ok(svg.includes('&lt;script&gt;'));
+  });
+
+  it('handles missing/unknown grade with a fallback color', () => {
+    const svg = formatBadge({ value: '—' });
+    assert.match(svg, /#555/);
+  });
+});
+
+describe('formatScoreBadge', () => {
+  it('shows "grade · overall" derived from a design.score object', () => {
+    const svg = formatScoreBadge({ grade: 'B', overall: 87 });
+    assert.ok(svg.includes('B · 87'));
+  });
+
+  it('returns an em-dash badge when score is missing', () => {
+    const svg = formatScoreBadge(null);
+    assert.ok(svg.includes('—'));
   });
 });

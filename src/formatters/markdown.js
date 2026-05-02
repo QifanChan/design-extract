@@ -623,6 +623,203 @@ export function formatMarkdown(design) {
     }
   }
 
+  // ── Motion Language (v9) ──
+  if (design.motion && (design.motion.durations?.length || design.motion.keyframes?.length)) {
+    lines.push('## Motion Language');
+    lines.push('');
+    lines.push(`**Feel:** ${design.motion.feel} · **Scroll-linked:** ${design.motion.scrollLinked?.present ? 'yes' : 'no'}`);
+    lines.push('');
+    if (design.motion.durations?.length) {
+      lines.push('### Duration Tokens');
+      lines.push('');
+      lines.push('| name | value | ms |');
+      lines.push('|---|---|---|');
+      for (const d of design.motion.durations) lines.push(`| \`${d.name}\` | \`${d.css}\` | ${d.ms} |`);
+      lines.push('');
+    }
+    if (design.motion.easings?.length) {
+      lines.push('### Easing Families');
+      lines.push('');
+      const byFamily = {};
+      for (const e of design.motion.easings) (byFamily[e.family] ||= []).push(e);
+      for (const [family, list] of Object.entries(byFamily)) {
+        lines.push(`- **${family}** (${list.reduce((s, e) => s + (e.count || 0), 0)} uses) — \`${list.map(e => e.raw).slice(0, 3).join('`, `')}\``);
+      }
+      lines.push('');
+    }
+    if (design.motion.springs?.length) {
+      lines.push('### Spring / Overshoot Easings');
+      lines.push('');
+      for (const s of design.motion.springs) lines.push(`- \`${s.raw}\``);
+      lines.push('');
+    }
+    const usedKf = (design.motion.keyframes || []).filter(k => k.used);
+    if (usedKf.length) {
+      lines.push('### Keyframes In Use');
+      lines.push('');
+      lines.push('| name | kind | properties | uses |');
+      lines.push('|---|---|---|---|');
+      for (const k of usedKf.slice(0, 20)) lines.push(`| \`${k.name}\` | ${k.kind} | ${k.propertiesAnimated.slice(0, 4).join(', ')} | ${k.usageCount} |`);
+      lines.push('');
+    }
+  }
+
+  // ── Component Anatomy (v9) ──
+  if ((design.componentAnatomy || []).length) {
+    lines.push('## Component Anatomy');
+    lines.push('');
+    for (const a of design.componentAnatomy.slice(0, 6)) {
+      lines.push(`### ${a.kind} — ${a.totalInstances} instance${a.totalInstances === 1 ? '' : 's'}`);
+      lines.push('');
+      const slots = Object.entries(a.slots).filter(([, v]) => v).map(([k]) => k);
+      if (slots.length) lines.push(`**Slots:** ${slots.join(', ')}`);
+      if (a.props.variant.length) lines.push(`**Variants:** ${a.props.variant.join(' · ')}`);
+      if (a.props.size.length) lines.push(`**Sizes:** ${a.props.size.join(' · ')}`);
+      lines.push('');
+      if (a.variants.length > 1) {
+        lines.push('| variant | count | sample label |');
+        lines.push('|---|---|---|');
+        for (const v of a.variants.slice(0, 8)) lines.push(`| ${v.name} | ${v.count} | ${(v.sampleText[0] || '').slice(0, 40)} |`);
+        lines.push('');
+      }
+    }
+  }
+
+  // ── Brand Voice (v9) ──
+  if (design.voice && (design.voice.ctaVerbs?.length || design.voice.sampleHeadings?.length)) {
+    lines.push('## Brand Voice');
+    lines.push('');
+    lines.push(`**Tone:** ${design.voice.tone} · **Pronoun:** ${design.voice.pronoun} · **Headings:** ${design.voice.headingStyle} (${design.voice.headingLengthClass})`);
+    lines.push('');
+    if (design.voice.ctaVerbs?.length) {
+      lines.push('### Top CTA Verbs');
+      lines.push('');
+      for (const v of design.voice.ctaVerbs.slice(0, 8)) lines.push(`- **${v.value}** (${v.count})`);
+      lines.push('');
+    }
+    if (design.voice.buttonPatterns?.length) {
+      lines.push('### Button Copy Patterns');
+      lines.push('');
+      for (const p of design.voice.buttonPatterns.slice(0, 10)) lines.push(`- "${p.value}" (${p.count}×)`);
+      lines.push('');
+    }
+    if (design.voice.sampleHeadings?.length) {
+      lines.push('### Sample Headings');
+      lines.push('');
+      for (const h of design.voice.sampleHeadings) lines.push(`> ${h}`);
+      lines.push('');
+    }
+  }
+
+  // ── v10: Page Intent ──
+  if (design.pageIntent && design.pageIntent.type) {
+    lines.push('## Page Intent');
+    lines.push('');
+    lines.push(`**Type:** \`${design.pageIntent.type}\` (confidence ${design.pageIntent.confidence})`);
+    if (design.pageIntent.description) lines.push(`**Description:** ${design.pageIntent.description}`);
+    if (design.pageIntent.alternates?.length) {
+      lines.push('');
+      lines.push('Alternates: ' + design.pageIntent.alternates.map(a => `${a.type} (${a.score})`).join(', '));
+    }
+    lines.push('');
+  }
+
+  // ── v10: Section Roles ──
+  if (design.sectionRoles && design.sectionRoles.sections?.length) {
+    lines.push('## Section Roles');
+    lines.push('');
+    lines.push('Reading order (top→bottom): ' + (design.sectionRoles.readingOrder || []).join(' → '));
+    lines.push('');
+    lines.push('| # | Role | Heading | Confidence |');
+    lines.push('|---|------|---------|------------|');
+    for (const s of design.sectionRoles.sections.slice(0, 20)) {
+      const h = (s.heading || '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|').slice(0, 80);
+      lines.push(`| ${s.index} | ${s.role}${s.subrole ? ` · ${s.subrole}` : ''} | ${h || '—'} | ${s.confidence} |`);
+    }
+    lines.push('');
+  }
+
+  // ── v10: Material Language ──
+  if (design.materialLanguage && design.materialLanguage.label) {
+    lines.push('## Material Language');
+    lines.push('');
+    lines.push(`**Label:** \`${design.materialLanguage.label}\` (confidence ${design.materialLanguage.confidence})`);
+    const m = design.materialLanguage.metrics || {};
+    lines.push('');
+    lines.push('| Metric | Value |');
+    lines.push('|--------|-------|');
+    if (m.saturation != null) lines.push(`| Avg saturation | ${m.saturation} |`);
+    if (m.shadowProfile) lines.push(`| Shadow profile | ${m.shadowProfile} |`);
+    if (m.avgShadowBlur != null) lines.push(`| Avg shadow blur | ${m.avgShadowBlur}px |`);
+    if (m.maxRadius != null) lines.push(`| Max radius | ${m.maxRadius}px |`);
+    if (m.hasBackdropBlur != null) lines.push(`| backdrop-filter in use | ${m.hasBackdropBlur ? 'yes' : 'no'} |`);
+    if (m.gradientCount != null) lines.push(`| Gradients | ${m.gradientCount} |`);
+    lines.push('');
+  }
+
+  // ── v10: Imagery Style ──
+  if (design.imageryStyle && design.imageryStyle.label && design.imageryStyle.label !== 'none') {
+    lines.push('## Imagery Style');
+    lines.push('');
+    lines.push(`**Label:** \`${design.imageryStyle.label}\` (confidence ${design.imageryStyle.confidence})`);
+    const c = design.imageryStyle.counts || {};
+    lines.push(`**Counts:** total ${c.total || 0}, svg ${c.svg || 0}, icon ${c.icon || 0}, screenshot-like ${c.screenshot || 0}, photo-like ${c.photoLike || 0}`);
+    if (design.imageryStyle.dominantAspect) lines.push(`**Dominant aspect:** ${design.imageryStyle.dominantAspect}`);
+    if (design.imageryStyle.radiusProfile) lines.push(`**Radius profile on images:** ${design.imageryStyle.radiusProfile}`);
+    lines.push('');
+  }
+
+  // ── v10: Component Library ──
+  if (design.componentLibrary && design.componentLibrary.library && design.componentLibrary.library !== 'unknown') {
+    lines.push('## Component Library');
+    lines.push('');
+    lines.push(`**Detected:** \`${design.componentLibrary.library}\` (confidence ${design.componentLibrary.confidence})`);
+    if ((design.componentLibrary.evidence || []).length) {
+      lines.push('');
+      lines.push('Evidence:');
+      for (const e of design.componentLibrary.evidence) lines.push(`- ${e}`);
+    }
+    if ((design.componentLibrary.alternates || []).length) {
+      lines.push('');
+      lines.push('Also considered: ' + design.componentLibrary.alternates.map(a => `${a.id} (${a.score})`).join(', '));
+    }
+    lines.push('');
+  }
+
+  // ── v10: Multi-Page Map ──
+  if (design.multiPage && Array.isArray(design.multiPage.pages) && design.multiPage.pages.length) {
+    lines.push('## Multi-Page Map');
+    lines.push('');
+    lines.push('| Page Type | URL | Status |');
+    lines.push('|-----------|-----|--------|');
+    for (const p of design.multiPage.pages) {
+      lines.push(`| ${p.type || '—'} | ${p.url} | ${p.error ? 'error' : 'ok'} |`);
+    }
+    lines.push('');
+    if (design.multiPage.consistency?.shared?.colors?.length) {
+      lines.push(`**Shared colors across pages:** ${design.multiPage.consistency.shared.colors.slice(0, 10).map(c => `\`${c}\``).join(', ')}`);
+      lines.push('');
+    }
+  }
+
+  // ── v10.1: Component Screenshots ──
+  if (design.componentScreenshots && Array.isArray(design.componentScreenshots.components) && design.componentScreenshots.components.length) {
+    lines.push('## Component Screenshots');
+    lines.push('');
+    lines.push(`${design.componentScreenshots.components.length} retina crops written to \`screenshots/\`. Index: \`*-screenshots.json\`.`);
+    lines.push('');
+    lines.push('| Cluster | Variant | Size (px) | File |');
+    lines.push('|---------|---------|-----------|------|');
+    for (const c of design.componentScreenshots.components.slice(0, 20)) {
+      lines.push(`| ${c.cluster} | ${c.variant} | ${c.bounds?.w || '?'} × ${c.bounds?.h || '?'} | \`${c.path}\` |`);
+    }
+    if (design.componentScreenshots.fullPage) {
+      lines.push('');
+      lines.push(`Full-page: \`${design.componentScreenshots.fullPage.path}\``);
+    }
+    lines.push('');
+  }
+
   // ── Quick Start ──
   lines.push('## Quick Start');
   lines.push('');

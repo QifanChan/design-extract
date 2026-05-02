@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Marginalia from './Marginalia';
+import ResultViewer from './ResultViewer';
 
 const STAGE_LABEL = {
   crawl: 'walking DOM',
@@ -34,6 +35,24 @@ export default function HeroExtractor() {
   const [copied, setCopied] = useState(false);
   const inputRef = useRef(null);
 
+  // Accept ?url= query param (Chrome extension handoff, deep links). Only
+  // applied once on mount; the extension prefills the input and the user still
+  // controls submission.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const incoming = params.get('url');
+    if (!incoming || !inputRef.current) return;
+    try {
+      const parsed = new URL(incoming);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        inputRef.current.value = parsed.toString();
+      }
+    } catch {
+      // Ignore malformed URLs silently — user still sees the default placeholder.
+    }
+  }, []);
+
   const reset = useCallback(() => {
     setStage(null);
     setCached(false);
@@ -52,6 +71,15 @@ export default function HeroExtractor() {
       case 'cache':
         setCached(true);
         break;
+      case 'permalink': {
+        // Rewrite the URL bar so a refresh / share lands on /x/<hash>.
+        // history.replaceState avoids a Next router navigation (we want to keep
+        // the live extraction state, just change the URL).
+        if (typeof window !== 'undefined' && event.hash) {
+          try { window.history.replaceState({}, '', `/x/${event.hash}`); } catch {}
+        }
+        break;
+      }
       case 'stage':
         setStage(event.name);
         break;
@@ -277,7 +305,7 @@ export default function HeroExtractor() {
       )}
 
       <p className="mono" style={{ marginTop: 14, fontSize: 11, color: 'var(--ink-3)' }}>
-        Free, rate-limited to 3 extractions per day. Private IPs rejected. No accounts.
+        Free demo: 1 extraction per day. Unlimited via the CLI — no account.
       </p>
 
       {/* ── Live paint ─────────────────────────────────────── */}
@@ -387,24 +415,11 @@ export default function HeroExtractor() {
       )}
 
       {files && (
-        <div style={{ marginTop: 'var(--r6)', display: 'flex', gap: 'var(--r3)', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="cta"
-            disabled={downloadBusy}
-          >
-            {downloadBusy ? 'Zipping…' : `Download all (.zip) — ${Object.keys(files).length} files`}
-          </button>
-          <button
-            type="button"
-            onClick={handleCopyMarkdown}
-            className="cta"
-            style={{ background: 'var(--paper)', color: 'var(--ink)', boxShadow: 'none' }}
-          >
-            {copied ? 'Copied' : 'Copy markdown'}
-          </button>
-        </div>
+        <ResultViewer
+          files={files}
+          onDownloadZip={handleDownload}
+          downloadBusy={downloadBusy}
+        />
       )}
 
       <style jsx>{`

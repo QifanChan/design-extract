@@ -1,4 +1,4 @@
-export const SITE_URL = 'https://designlang.manavaryasingh.com';
+export const SITE_URL = 'https://designlang.app';
 export const SITE_NAME = 'designlang';
 
 export const SITE_TITLE =
@@ -78,5 +78,32 @@ export const SITE_KEYWORDS = [
   'CLI design system tool',
   'npx designlang',
   'designlang',
+  'designlang.app',
+  'design-extractor.com alternative',
+  'design-extractor alternative',
+  'design extractor',
+  'design extractor cli',
+  'design extractor open source',
+  'design extractor free',
+  'DESIGN.md generator',
+  'DESIGN.md extractor',
+  'AGENTS.md design',
+  'agent-native design system',
+  'extract DESIGN.md from url',
+  'url to DESIGN.md',
+  'website to DESIGN.md',
+  'design tokens for AI agents',
+  'AI coding agents design system',
+  'Claude Artifacts design tokens',
+  'Lovable design tokens',
+  'Cursor design tokens',
+  'v0 design tokens',
+  'extract design system from website CLI',
+  'design regression CI',
+  'design drift CI',
+  'website to Storybook',
+  'website to Next.js',
+  'clone website design',
+  'one click website clone',
   'Manav Arya Singh',
 ];
