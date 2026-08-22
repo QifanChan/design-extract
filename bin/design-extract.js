@@ -2322,6 +2322,72 @@ program
     }
   });
 
+// ── Doctor — sanity-check the local install ────────────────
+program
+  .command('doctor')
+  .description('Print a one-screen health check of the local designlang install')
+  .action(async () => {
+    const { existsSync, accessSync, constants } = await import('fs');
+    const { createRequire } = await import('module');
+    const require = createRequire(import.meta.url);
+    const pkg = JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8'));
+    const checks = [];
+    const add = (label, value, status, fix) => checks.push({ label, value, status, fix });
+
+    const nodeMajor = Number(process.versions.node.split('.')[0]);
+    const minNode = Number((pkg.engines?.node || '>=20').replace(/\D+/g, ''));
+    add('Node', process.version, nodeMajor >= minNode ? 'OK' : 'FAIL', `upgrade to Node ${minNode} or newer`);
+
+    add('designlang', `v${PKG_VERSION}`, 'OK');
+
+    try {
+      const pwPkg = JSON.parse(readFileSync(require.resolve('playwright/package.json'), 'utf-8'));
+      add('playwright', pwPkg.version, 'OK');
+    } catch {
+      add('playwright', 'not installed', 'FAIL', 'npm install');
+    }
+
+    try {
+      const { chromium } = await import('playwright');
+      const bin = chromium.executablePath();
+      if (existsSync(bin)) add('Chromium binary', bin, 'OK');
+      else add('Chromium binary', 'not installed', 'FAIL', 'npx playwright install chromium');
+    } catch {
+      add('Chromium binary', 'not resolvable', 'FAIL', 'npx playwright install chromium');
+    }
+
+    const outDir = resolve('./design-extract-output');
+    try {
+      accessSync(existsSync(outDir) ? outDir : dirname(outDir), constants.W_OK);
+      add('Output dir', `${outDir} writable`, 'OK');
+    } catch {
+      add('Output dir', `${outDir} not writable`, 'FAIL', 'check directory permissions, or pass -o <dir>');
+    }
+
+    try {
+      const res = await fetch('https://api.github.com', { signal: AbortSignal.timeout(3000) });
+      add('Network', `api.github.com reachable (${res.status})`, 'OK');
+    } catch {
+      add('Network', 'api.github.com unreachable', 'WARN', 'only needed for remote features — extraction of local URLs still works');
+    }
+
+    const pad = Math.max(...checks.map(c => c.label.length)) + 2;
+    const paint = { OK: chalk.green, WARN: chalk.yellow, FAIL: chalk.red };
+    console.log('');
+    console.log(chalk.bold('  designlang doctor'));
+    console.log('');
+    for (const c of checks) {
+      console.log(`  ${c.label.padEnd(pad)}${c.value}  ${paint[c.status](c.status)}`);
+      if (c.status !== 'OK' && c.fix) console.log(`  ${''.padEnd(pad)}${chalk.dim('fix: ' + c.fix)}`);
+    }
+    console.log('');
+    const failed = checks.filter(c => c.status === 'FAIL');
+    if (failed.length) console.log(chalk.red(`  ${failed.length} check${failed.length > 1 ? 's' : ''} failed.`));
+    else console.log(chalk.green('  All checks passed.'));
+    console.log('');
+    process.exit(failed.length ? 1 : 0);
+  });
+
 // ── MCP server command ─────────────────────────────────────
 program
   .command('mcp')
