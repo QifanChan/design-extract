@@ -253,6 +253,7 @@ designlang drift https://yourapp.com --tokens ./src/tokens.json
 designlang lint ./src/tokens/design-tokens.json     # CI-ready linter
 designlang visual-diff https://staging.app https://app   # single-file HTML diff
 designlang mcp                              # stdio MCP server for Cursor / Claude Code
+designlang doctor                           # sanity-check the local install
 ```
 
 ## All features
@@ -399,6 +400,7 @@ designlang ships surfaces beyond the CLI:
 | **Figma plugin** | [`figma-plugin/`](figma-plugin/) | Paste a URL inside Figma, get a full Variables collection. |
 | **GitHub Action** | [`github-action/`](github-action/) | "Design regression guard" — diffs tokens on every PR and comments. |
 | **Chrome extension** | [`chrome-extension/`](chrome-extension/) | One-click handoff from any tab (MV3, `activeTab` only). |
+| **Doctor** | `designlang doctor` | One-screen health check of the local install — Node, playwright, Chromium binary, output dir, network. Exits `1` if anything fails. |
 | **MCP server** | `npx designlang mcp` | Exposes the extracted design as MCP resources + tools for Cursor, Claude Code, Windsurf, etc. See [`docs/MCP-REGISTRY.md`](docs/MCP-REGISTRY.md). |
 | **Claude Code plugin** | [`.claude-plugin/`](.claude-plugin/) | Five slash commands inside Claude Code — `/extract`, `/grade`, `/battle`, `/remix`, `/pack`. |
 

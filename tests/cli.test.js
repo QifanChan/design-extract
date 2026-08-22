@@ -1,8 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, openSync, closeSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, join } from 'node:path';
 import { parsePlatforms, mergeConfig } from '../src/config.js';
 
 const CLI_PATH = resolve(import.meta.dirname, '..', 'bin', 'design-extract.js');
@@ -119,5 +120,59 @@ describe('mergeConfig platforms', () => {
   it('defaults to [web] when neither CLI nor config provides platforms', () => {
     const merged = mergeConfig({}, {});
     assert.deepEqual(merged.platforms, ['web']);
+  });
+});
+
+describe('doctor command', () => {
+  const runDoctor = (args = []) => {
+    try {
+      return { status: 0, output: execFileSync('node', [CLI_PATH, 'doctor', ...args], { encoding: 'utf-8', stdio: 'pipe' }) };
+    } catch (err) {
+      return { status: err.status, output: (err.stdout || '') + (err.stderr || '') };
+    }
+  };
+
+  it('registers the doctor command in help output', () => {
+    // Redirect to a file rather than a pipe: commander exits before a piped
+    // stdout flushes, which truncates the tail of the command list.
+    const tmp = join(tmpdir(), `designlang-help-${process.pid}.txt`);
+    const fd = openSync(tmp, 'w');
+    try {
+      execFileSync('node', [CLI_PATH, '--help'], { stdio: ['ignore', fd, 'ignore'] });
+    } finally {
+      closeSync(fd);
+    }
+    const output = readFileSync(tmp, 'utf-8');
+    rmSync(tmp, { force: true });
+    assert.ok(output.includes('doctor'));
+  });
+
+  it('describes itself under doctor --help', () => {
+    const output = execFileSync('node', [CLI_PATH, 'doctor', '--help'], { encoding: 'utf-8' });
+    assert.ok(output.includes('health check'));
+  });
+
+  it('prints a row for every environment check', () => {
+    const { output } = runDoctor();
+    for (const label of ['Node', 'designlang', 'playwright', 'Chromium binary', 'Output dir', 'Network']) {
+      assert.ok(output.includes(label), `missing check row: ${label}`);
+    }
+  });
+
+  it('reports the running designlang version', () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8'));
+    const { output } = runDoctor();
+    assert.ok(output.includes(pkg.version));
+  });
+
+  it('exits 0 if and only if every check passed', () => {
+    const { status, output } = runDoctor();
+    assert.equal(status === 0, output.includes('All checks passed'));
+  });
+
+  it('prints a fix hint for each failing check', () => {
+    const { output } = runDoctor();
+    const failed = output.split('\n').filter(l => /\bFAIL\b/.test(l));
+    if (failed.length) assert.ok(output.includes('fix:'), 'a failing check must print a fix hint');
   });
 });
