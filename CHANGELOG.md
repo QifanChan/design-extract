@@ -1,5 +1,47 @@
 # Changelog
 
+## [13.1.0] — 2026-08-24
+
+**Design DNA — a measured design space, so "these look similar" stops being an opinion.**
+
+Every other feature in designlang answers *what* a design uses. `dna` answers
+**where it sits**. It reduces an extracted design to 30 deterministic features
+across five axes — colour, type, space, shape, motion — and ranks it against a
+corpus of real design systems.
+
+```bash
+designlang dna raycast.com          # → nearest systems, per-axis percentiles, outliers
+designlang dna-corpus a.com b.com   # → build your own reference frame
+```
+
+- **`designlang dna <url>`** — emits `*-dna.json` (vector, raw measurements,
+  neighbours, percentiles) and `*-dna.md` (a readable report: where it sits per
+  axis, its nearest design systems and what separates them, and the features
+  that make it look the way it does).
+- **`designlang dna-corpus <urls...>`** — extracts several sites and writes the
+  corpus that `dna` ranks against. Ships with an 8-system default corpus.
+- **`designlang grade`** now prints the nearest design system beside the letter,
+  when a corpus is available. A grade with no reference frame is half a claim.
+
+Honesty constraints, enforced by tests rather than convention:
+
+- A feature the page never exposed stays `null` — distance skips it rather than
+  substituting a midpoint that would silently move the design in the space.
+- Every distance reports how many features backed it; every percentile names its
+  corpus and size; the report warns when coverage was partial.
+- `FEATURE_ORDER` and the normalization ranges are frozen per vector version. A
+  corpus built for a different version is rejected, not quietly compared against.
+
+### Fixed
+
+- **Subcommand options were silently ignored.** The root command declares both a
+  positional `<url>` and `-o/--out`, which made Commander claim any option typed
+  after a subcommand for the root — so `designlang grade <url> -o <dir>` (and
+  every other subcommand's `-o`, `-n`, …) was dropped and output always landed in
+  `./design-extract-output`. Fixed with `enablePositionalOptions()`; this also
+  resolves three long-failing PDF renderer tests.
+
+
 ## [13.0.0] — 2026-06-25
 
 **Live Extraction Theatre — watch the real browser read a site, on the website, and a 3× bigger gallery.**
