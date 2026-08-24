@@ -97,6 +97,11 @@ const program = new Command();
 program
   .name('designlang')
   .description('Extract the complete design language from any website')
+  // Without this, options typed after a subcommand (`designlang dna <url> -o
+  // <dir>`) are claimed by the root command, whose own `-o` shadows every
+  // subcommand's — so `-o`, `-n` and friends were silently ignored on every
+  // subcommand and output always landed in the default directory.
+  .enablePositionalOptions()
   .version(PKG_VERSION);
 
 // ── Main command: extract ──────────────────────────────────────
@@ -1354,6 +1359,7 @@ program
       const gradeColor = s.grade === 'A' ? chalk.green : s.grade === 'B' ? chalk.cyan : s.grade === 'C' ? chalk.yellow : chalk.red;
       console.log('');
       console.log(`  ${gradeColor.bold(`Grade ${s.grade}`)} ${chalk.gray('·')} ${chalk.bold(`${s.overall}/100`)} ${chalk.gray('·')} ${chalk.gray(url)}`);
+
       console.log('');
       for (const f of written) console.log(`  ${chalk.green('✓')} ${chalk.gray(f)}`);
       console.log('');
