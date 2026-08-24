@@ -1359,6 +1359,20 @@ program
       const gradeColor = s.grade === 'A' ? chalk.green : s.grade === 'B' ? chalk.cyan : s.grade === 'C' ? chalk.yellow : chalk.red;
       console.log('');
       console.log(`  ${gradeColor.bold(`Grade ${s.grade}`)} ${chalk.gray('·')} ${chalk.bold(`${s.overall}/100`)} ${chalk.gray('·')} ${chalk.gray(url)}`);
+      // A letter on its own has no reference frame. When a DNA corpus is
+      // available, say where this design actually sits among real systems.
+      try {
+        const { analyze, loadCorpus, DEFAULT_CORPUS } = await import('../src/dna/index.js');
+        const corpus = loadCorpus(DEFAULT_CORPUS);
+        if (corpus) {
+          const { neighbours } = analyze(design, corpus);
+          if (neighbours.length) {
+            console.log(chalk.gray(`  Nearest of ${corpus.size} systems: ${neighbours[0].url} (distance ${neighbours[0].distance.toFixed(2)}) · designlang dna ${url}`));
+          }
+        }
+      } catch {
+        // DNA is a bonus line on the grade card, never a reason it fails.
+      }
 
       console.log('');
       for (const f of written) console.log(`  ${chalk.green('✓')} ${chalk.gray(f)}`);
@@ -2392,6 +2406,104 @@ program
     else console.log(chalk.green('  All checks passed.'));
     console.log('');
     process.exit(failed.length ? 1 : 0);
+  });
+
+// ── DNA command — where a design sits in the measured space ─
+program
+  .command('dna <url>')
+  .description('Place a design in the measured design space — nearest systems, per-axis percentiles, outliers')
+  .option('-o, --out <dir>', 'output directory', './design-extract-output')
+  .option('-n, --name <name>', 'output file prefix (default: derived from URL)')
+  .option('--corpus <file>', 'corpus to rank against (default: the one shipped with designlang)')
+  .action(async (url, opts) => {
+    if (!url.startsWith('http')) url = `https://${url}`;
+    validateUrl(url);
+
+    const { analyze, writeDnaOutputs, loadCorpus, DEFAULT_CORPUS } = await import('../src/dna/index.js');
+
+    const spinner = ora('Reading design DNA...').start();
+    try {
+      const corpus = loadCorpus(opts.corpus ? resolve(opts.corpus) : DEFAULT_CORPUS);
+      const design = await extractDesignLanguage(url);
+      const analysis = analyze(design, corpus);
+
+      const outDir = resolve(opts.out);
+      const written = writeDnaOutputs({
+        analysis,
+        outDir,
+        prefix: opts.name || nameFromUrl(url),
+      });
+      spinner.stop();
+
+      const v = analysis.vector;
+      console.log('');
+      console.log(`  ${chalk.bold('Design DNA')} ${chalk.gray('·')} ${chalk.gray(url)}`);
+      console.log(`  ${chalk.gray(`${v.order.length} features, ${Math.round(v.coverage * 100)}% measurable`)}`);
+      console.log('');
+
+      if (!corpus) {
+        console.log(chalk.yellow('  No corpus found — the vector was written, but nothing to rank it against.'));
+        console.log(chalk.gray('  Build one:  designlang dna-corpus <urls...>'));
+      } else {
+        console.log(chalk.dim(`  vs ${corpus.size} systems (${corpus.name})`));
+        console.log('');
+        for (const [axis, p] of Object.entries(analysis.percentiles.axes)) {
+          const line = p === null ? chalk.gray('not measured') : `${String(Math.round(p * 100)).padStart(3)}th percentile`;
+          console.log(`  ${axis.padEnd(8)}${line}`);
+        }
+        if (analysis.neighbours.length) {
+          console.log('');
+          console.log(chalk.bold('  Nearest'));
+          for (const n of analysis.neighbours.slice(0, 3)) {
+            console.log(`  ${n.distance.toFixed(2)}  ${chalk.gray(n.url)}`);
+          }
+        }
+      }
+
+      console.log('');
+      for (const f of written) console.log(`  ${chalk.green('\u2713')} ${chalk.gray(f)}`);
+      console.log('');
+    } catch (err) {
+      spinner.fail('DNA failed');
+      console.error(chalk.red(`\n  ${err.message}\n`));
+      process.exit(1);
+    }
+  });
+
+// ── DNA corpus builder ─────────────────────────────────────
+program
+  .command('dna-corpus <urls...>')
+  .description('Extract several sites and write the corpus that `designlang dna` ranks against')
+  .option('-o, --out <file>', 'corpus file to write (default: the one shipped with designlang)')
+  .option('--name <name>', 'corpus name recorded in the file', 'default')
+  .action(async (urls, opts) => {
+    const { buildAndSaveCorpus, DEFAULT_CORPUS } = await import('../src/dna/index.js');
+    const file = opts.out ? resolve(opts.out) : DEFAULT_CORPUS;
+
+    const designs = [];
+    for (const raw of urls) {
+      const url = raw.startsWith('http') ? raw : `https://${raw}`;
+      validateUrl(url);
+      const spinner = ora(`Extracting ${url}...`).start();
+      try {
+        designs.push(await extractDesignLanguage(url));
+        spinner.succeed(chalk.gray(url));
+      } catch (err) {
+        // One unreachable site should not throw away the rest of the corpus.
+        spinner.fail(`${chalk.gray(url)} ${chalk.red(err.message)}`);
+      }
+    }
+
+    if (!designs.length) {
+      console.error(chalk.red('\n  Nothing extracted — corpus not written.\n'));
+      process.exit(1);
+    }
+
+    const corpus = buildAndSaveCorpus(designs, file, { name: opts.name });
+    console.log('');
+    console.log(`  ${chalk.green('\u2713')} ${chalk.gray(file)}`);
+    console.log(`  ${chalk.gray(`${corpus.size} systems, vector v${corpus.version}`)}`);
+    console.log('');
   });
 
 // ── MCP server command ─────────────────────────────────────
