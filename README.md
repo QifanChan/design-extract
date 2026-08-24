@@ -46,6 +46,7 @@ It also goes where extractors don't: **layout patterns**, **responsive behavior 
 
 ```bash
 npx designlang https://stripe.com                      # extract everything
+npx designlang dna stripe.com                          # place it in the measured design space: neighbours + percentiles ← v13.1
 npx designlang site stripe.com                         # whole-site: one canonical system + consistency grade ← v12.23
 npx designlang fidelity stripe.com --clone localhost:3000  # score a clone vs the original (visual + motion) ← v12.24
 npx designlang gallery                                 # static shareable gallery of measured clones      ← v12.24
@@ -146,6 +147,66 @@ deployable static site — an index of score cards plus a permalink page per clo
 npx designlang gallery --title "Our clones" --base-url https://clones.example.com
 ```
 
+## A measured design space (`dna`)
+
+Every extractor on the market answers *what* a design uses. None of them answers
+**where it sits**. `designlang grade` returns a letter — but a letter with no
+reference frame is a thermometer with no scale on it.
+
+`designlang dna` reduces a design to **30 deterministic features** across five
+axes — colour, type, space, shape, motion — and ranks it against a corpus of
+real design systems:
+
+```bash
+npx designlang dna raycast.com
+```
+
+```
+  Design DNA · https://raycast.com
+  30 features, 100% measurable
+
+  vs 8 systems (default)
+
+  color    65th percentile
+  type     56th percentile
+  space    42th percentile
+  shape    79th percentile
+  motion   67th percentile
+
+  Nearest
+  0.14  https://railway.app
+  0.15  https://linear.app
+  0.19  https://notion.so
+```
+
+Distance is the mean absolute difference across the features both designs have,
+so `0.14` reads as "the average feature is 14% of its range apart" — a number you
+can reason about, unlike a Euclidean distance in 30 dimensions.
+
+The report goes past similarity to **what makes a design look the way it does**:
+the features furthest from the middle of the corpus, in plain language
+(*"corner radius — 100th percentile, far above the corpus"*).
+
+Bring your own reference frame — your products, your competitors, a target look:
+
+```bash
+npx designlang dna-corpus acme.com acme.com/pricing competitor.com
+npx designlang dna acme.com/new-page --corpus ./corpus.json
+```
+
+Three things it refuses to do, because a design score that overclaims is worse
+than no score at all:
+
+- **A missing measurement stays missing.** Features the page never exposed are
+  `null`, never a substituted midpoint, and distance skips them instead of
+  comparing against an invented value.
+- **Every number carries its evidence.** Distances report how many features
+  backed them, percentiles name the corpus and its size, and the report warns
+  when coverage was partial.
+- **The space is versioned.** Feature order and normalization are frozen per
+  vector version, and a corpus built by different rules is rejected rather than
+  silently compared against.
+
 ## Install
 
 ```bash
@@ -182,6 +243,7 @@ the commands are available:
 | `/verify <url>` | rebuild from tokens, pixel-diff vs live, fidelity score |
 | `/fidelity <url> --clone <url>` | score a clone vs the original (visual + motion) + correction plan |
 | `/gallery [dir]` | build a static shareable gallery of measured clones |
+| `/dna <url>` | place a design in the measured design space — nearest systems, per-axis percentiles, outliers |
 
 > Prefer the raw MCP tools? The CLI also ships an MCP server — run
 > `designlang mcp --output-dir ./design-extract-output` to serve the latest
@@ -292,6 +354,8 @@ designlang doctor                           # sanity-check the local install
 | Theme-swap (v12.6) | `designlang theme-swap <url> --primary <hex>` | Recolour the extracted design around a new brand primary. OKLCH hue rotation, neutrals preserved, type/spacing/motion untouched |
 | Brand book (v12.7) | `designlang brand <url>` | Full editorial brand-guidelines document (13 chapters: cover, about, logo, colour, type, spacing, shape, iconography, motion, components, voice, a11y, tokens, how-to-use). Print-ready, dark-mode toggle, hand-off-ready |
 | Pair (NEW v12.8) | `designlang pair <urlA> <urlB>` | Fuse two designs across 7 axes (colours/type/spacing/shape/motion/voice/components). Defaults to "visuals from A, voice + type from B". `--brand` also emits a brand book of the fused identity |
+| Design DNA (NEW v13.1) | `designlang dna <url>` | Reduce a design to a 30-feature vector (colour / type / space / shape / motion) and rank it against a corpus of real design systems — nearest neighbours, per-axis percentiles, outlier features |
+| DNA corpus (NEW v13.1) | `designlang dna-corpus <urls...>` | Build your own reference frame — your products, your competitors — for `dna` to measure against |
 | Watch | `designlang watch <url>` | Monitor for design changes on interval |
 | Diff | `designlang diff <A> <B>` | Compare two sites (MD + HTML) |
 | Multi-brand | `designlang brands <urls...>` | N-site comparison matrix |
