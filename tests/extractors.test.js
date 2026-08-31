@@ -972,3 +972,63 @@ describe('typography system', () => {
     assert.deepEqual(t.tracking.map(x => x.value), ['-0.02em']);
   });
 });
+
+// ── Layout system (v13.2) ───────────────────────────────────────
+
+describe('layout system', () => {
+  const box = (o) => makeEl({ width: 0, height: 0, area: 0, ...o });
+  const styles = [
+    box({ tag: 'section', width: 1440, height: 600, area: 864000, marginLeft: 'auto', marginRight: 'auto', paddingTop: '96px', paddingBottom: '96px' }),
+    box({ tag: 'section', width: 1440, height: 500, area: 720000, marginLeft: 'auto', marginRight: 'auto', paddingTop: '96px', paddingBottom: '128px' }),
+    box({ tag: 'div', width: 1200, height: 400, area: 480000, maxWidth: '1200px', paddingLeft: '24px', paddingRight: '24px' }),
+    box({ tag: 'div', width: 1200, height: 300, area: 360000, maxWidth: '1200px', paddingLeft: '24px' }),
+    box({ tag: 'div', display: 'grid', width: 1200, height: 300, area: 360000, gridTemplateColumns: 'repeat(12, 1fr)', gap: '32px' }),
+    box({ tag: 'div', display: 'grid', width: 380, height: 200, area: 76000, gridTemplateColumns: '1fr 1fr', gap: '16px' }),
+  ];
+
+  it('finds the content width and gutter', () => {
+    const { system } = extractLayout(styles);
+    assert.equal(system.container.contentWidth, 1200);
+    assert.equal(system.container.gutter, 24);
+    assert.equal(system.density, 0.02);
+  });
+
+  it('picks the column system by area, not by count', () => {
+    const { system } = extractLayout(styles);
+    assert.equal(system.columns.dominant, 12);
+    assert.equal(system.columns.canonical, true);
+  });
+
+  it('reads section rhythm from full-bleed sections', () => {
+    const { system } = extractLayout(styles);
+    assert.equal(system.rhythm.section, 96);
+    assert.deepEqual(system.rhythm.ladder, [96, 128]);
+  });
+
+  it('sorts the gap scale numerically', () => {
+    const { system } = extractLayout([
+      box({ tag: 'div', display: 'flex', width: 400, height: 100, area: 40000, gap: '4px' }),
+      box({ tag: 'div', display: 'flex', width: 400, height: 100, area: 40000, gap: '10px' }),
+      box({ tag: 'div', display: 'flex', width: 400, height: 100, area: 40000, gap: '32px' }),
+    ]);
+    assert.deepEqual(system.gapScale, [4, 10, 32]);
+  });
+
+  it('collects fluid layout declarations', () => {
+    const { system } = extractLayout(styles, {
+      fluidValues: [
+        { property: 'max-width', value: 'clamp(320px, 90vw, 1200px)', selector: '.container' },
+        { property: 'font-size', value: 'clamp(1rem, 2vw, 2rem)', selector: 'h1' },
+      ],
+    });
+    assert.equal(system.fluid.count, 1);
+    assert.equal(system.fluid.declarations[0].property, 'max-width');
+  });
+
+  it('survives a page with no containers', () => {
+    const { system } = extractLayout([box({ tag: 'div' })]);
+    assert.equal(system.container, null);
+    assert.equal(system.rhythm, null);
+    assert.equal(system.density, null);
+  });
+});

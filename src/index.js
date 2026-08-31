@@ -74,7 +74,7 @@ export async function extractDesignLanguage(url, options = {}) {
     animations: safeExtract(extractAnimations, styles, rawData.light.keyframes) || { transitions: [], keyframes: [] },
     components: safeExtract(extractComponents, styles) || {},
     accessibility: safeExtract(extractAccessibility, styles) || { score: 0, failCount: 0 },
-    layout: safeExtract(extractLayout, styles) || { gridCount: 0, flexCount: 0 },
+    layout: safeExtract(extractLayout, styles, { fluidValues: rawData.light.fluidValues || [] }) || { gridCount: 0, flexCount: 0 },
     gradients: safeExtract(extractGradients, styles) || { count: 0 },
     zIndex: safeExtract(extractZIndex, styles) || { allValues: [], issues: [] },
     icons: rawData.light.icons ? (safeExtract(extractIcons, rawData.light.icons) || { icons: [], count: 0 }) : { icons: [], count: 0 },

@@ -370,6 +370,37 @@ export function formatMarkdown(design) {
     lines.push(`**${l.gridCount} grid containers** and **${l.flexCount} flex containers** detected.`);
     lines.push('');
 
+    if (l.system) {
+      const sy = l.system;
+      lines.push('### The System');
+      lines.push('');
+      if (sy.container) {
+        lines.push(`- **Content column** — ${sy.container.contentWidth}px wide${sy.container.gutter != null ? `, ${sy.container.gutter}px gutters` : ''}${sy.density != null ? ` (${Math.round(sy.density * 100)}% edge density)` : ''}`);
+        if (sy.container.ladder.length > 1) {
+          lines.push(`  - Width ladder: ${sy.container.ladder.map(w => `${w}px`).join(' · ')}`);
+        }
+      }
+      if (sy.columns) {
+        lines.push(`- **Column system** — ${sy.columns.dominant} columns${sy.columns.canonical ? ' (canonical page grid)' : ''}`);
+      }
+      if (sy.rhythm) {
+        lines.push(`- **Section rhythm** — ${sy.rhythm.section}px vertical padding (ladder: ${sy.rhythm.ladder.map(r => `${r}px`).join(' · ')})`);
+      }
+      if (sy.gapScale?.length > 0) {
+        lines.push(`- **Gap scale** — ${sy.gapScale.map(g => `${g}px`).join(' · ')}`);
+      }
+      if (sy.fluid?.count > 0) {
+        lines.push(`- **Fluid layout** — ${sy.fluid.count} clamp/viewport declarations`);
+        lines.push('');
+        lines.push('```css');
+        for (const f of sy.fluid.declarations.slice(0, 6)) {
+          lines.push(`${f.selector || '/* … */'} { ${f.property}: ${f.value}; }`);
+        }
+        lines.push('```');
+      }
+      lines.push('');
+    }
+
     if (l.containerWidths.length > 0) {
       lines.push('### Container Widths');
       lines.push('');
