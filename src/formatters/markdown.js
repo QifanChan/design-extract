@@ -143,7 +143,7 @@ export function formatMarkdown(design) {
       lines.push(`- **Scale ratio** — irregular (${sys.ratio.steps} distinct sizes, no modular ratio fits)`);
     }
     if (sys.measure) {
-      lines.push(`- **Measure** — ~${sys.measure.charsPerLine} characters per line (${sys.measure.verdict})`);
+      lines.push(`- **Measure** — ~${sys.measure.charsPerLine} characters per line (${sys.measure.verdict}${sys.measure.confidence === 'high' ? '' : `, ${sys.measure.confidence} confidence from ${sys.measure.samples} ${sys.measure.samples === 1 ? 'sample' : 'samples'}`})`);
     }
     if (sys.fluid?.isFluid) {
       const r = sys.fluid.range;
@@ -421,7 +421,10 @@ export function formatMarkdown(design) {
       lines.push('### The System');
       lines.push('');
       if (sy.container) {
-        lines.push(`- **Content column** — ${sy.container.contentWidth}px wide${sy.container.gutter != null ? `, ${sy.container.gutter}px gutters` : ''}${sy.density != null ? ` (${Math.round(sy.density * 100)}% edge density)` : ''}`);
+        lines.push(`- **Content column** — ${sy.container.contentWidth}px wide${sy.container.fullBleed ? ' (full-bleed — no constrained container found)' : ''}${sy.container.gutter != null ? `, ${sy.container.gutter}px gutters` : ''}${sy.density != null ? ` (${Math.round(sy.density * 100)}% edge density)` : ''}`);
+        if (sy.container.fullBleed && sy.container.innerWidth) {
+          lines.push(`  - Widest constrained block inside it: ${sy.container.innerWidth}px`);
+        }
         if (sy.container.ladder.length > 1) {
           lines.push(`  - Width ladder: ${sy.container.ladder.map(w => `${w}px`).join(' · ')}`);
         }

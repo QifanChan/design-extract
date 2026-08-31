@@ -934,6 +934,30 @@ describe('typography system', () => {
     assert.equal(parseFluidValue('18px'), null);
   });
 
+  it('reserves display for the largest step and orders the rest', () => {
+    const t = extractTypography([
+      typeEl({ tag: 'div', fontSize: '64px' }),
+      typeEl({ tag: 'div', fontSize: '40px' }),
+      typeEl({ tag: 'h1', fontSize: '48px' }),
+      typeEl({ tag: 'p', fontSize: '16px' }),
+    ]);
+    assert.deepEqual(t.roleScale.map(s => [s.role, s.size]), [
+      ['display', 64],
+      ['h1', 48],
+      ['title-1', 40],
+      ['body', 16],
+    ]);
+  });
+
+  it('measures the reading column, not the narrowest paragraph', () => {
+    const t = extractTypography([
+      typeEl({ tag: 'p', fontSize: '16px', width: 640 }),
+      typeEl({ tag: 'p', fontSize: '16px', width: 640 }),
+      ...Array.from({ length: 20 }, () => typeEl({ tag: 'p', fontSize: '16px', width: 180 })),
+    ]);
+    assert.equal(t.system.measure.charsPerLine, 80);
+  });
+
   it('names every step in the scale', () => {
     const t = extractTypography(styles);
     const roles = t.roleScale.map(s => s.role);
@@ -1024,6 +1048,28 @@ describe('layout system', () => {
     });
     assert.equal(system.fluid.count, 1);
     assert.equal(system.fluid.declarations[0].property, 'max-width');
+  });
+
+  it('reports a full-bleed shell instead of promoting a card', () => {
+    const { system } = extractLayout([
+      box({ tag: 'div', width: 1440, height: 900, area: 1296000, marginLeft: 'auto', marginRight: 'auto', paddingLeft: '24px' }),
+      box({ tag: 'div', width: 440, height: 300, area: 132000, maxWidth: '440px' }),
+    ], { viewportWidth: 1440 });
+    assert.equal(system.container.fullBleed, true);
+    assert.equal(system.container.contentWidth, 1440);
+    assert.equal(system.container.innerWidth, 440);
+    assert.deepEqual(system.container.ladder, [440, 1440]);
+  });
+
+  it('prefers a constrained column when one governs real area', () => {
+    const { system } = extractLayout([
+      box({ tag: 'div', width: 1440, height: 200, area: 288000, marginLeft: 'auto', marginRight: 'auto' }),
+      box({ tag: 'div', width: 1200, height: 800, area: 960000, maxWidth: '1200px', paddingLeft: '32px' }),
+      box({ tag: 'div', width: 1200, height: 600, area: 720000, maxWidth: '1200px', paddingLeft: '32px' }),
+    ], { viewportWidth: 1440 });
+    assert.equal(system.container.fullBleed, false);
+    assert.equal(system.container.contentWidth, 1200);
+    assert.equal(system.container.gutter, 32);
   });
 
   it('survives a page with no containers', () => {

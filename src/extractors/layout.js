@@ -57,28 +57,76 @@ function analyzeLayoutSystem(computedStyles, gridPatterns, gaps, options = {}) {
   // Containers: elements that are centred and constrained. We read the
   // rendered width rather than the declared max-width so `max-width: 90%`
   // and clamp() containers still land in the ladder.
-  const contentWidths = [];
-  const gutters = [];
+  const candidates = [];
   for (const el of computedStyles) {
     const w = typeof el.width === 'number' ? el.width : null;
     if (!w || w < 320) continue;
+    // A constrained block, not a constrained button: real containers govern
+    // a meaningful slab of the page.
+    if ((el.area || 0) < 50000) continue;
     const declared = px(el.maxWidth);
     const centred = el.marginLeft === el.marginRight && /auto/.test(String(el.marginLeft || ''));
     if (declared || centred) {
-      contentWidths.push(Math.round(w));
-      const padL = px(el.paddingLeft);
-      if (padL != null && padL > 0) gutters.push(Math.round(padL));
+      candidates.push({ width: Math.round(w), area: el.area || 0, declared: declared != null, gutter: px(el.paddingLeft) });
     }
   }
 
-  const widthLadder = clusterBy(contentWidths).slice(0, 6);
+  // The content column is the width governing the most page area — picking
+  // the most *frequent* width instead returns whatever card or button
+  // repeats hardest.
+  const viewport = options.viewportWidth
+    || Math.max(0, ...computedStyles.map(el => (typeof el.width === 'number' ? el.width : 0)));
+
+  function dominant(pool) {
+    if (pool.length === 0) return null;
+    const declaredFirst = pool.filter(c => c.declared);
+    const use = declaredFirst.length >= 2 ? declaredFirst : pool;
+    const ladder = clusterBy(use.map(c => c.width)).slice(0, 6);
+    const areaByWidth = new Map();
+    for (const c of use) {
+      const bucket = ladder.reduce(
+        (a, b) => (Math.abs(b.value - c.width) < Math.abs(a.value - c.width) ? b : a),
+        ladder[0] || { value: c.width },
+      ).value;
+      areaByWidth.set(bucket, (areaByWidth.get(bucket) || 0) + c.area);
+    }
+    const [width, area] = [...areaByWidth.entries()].sort((a, b) => b[1] - a[1])[0] || [];
+    if (width == null) return null;
+    return { width, area, ladder, pool: use };
+  }
+
+  // A wrapper as wide as the window is full-bleed rather than a content
+  // column — but a page whose layout really is full-bleed (padding on a
+  // full-width shell, no inner max-width) should be reported as such rather
+  // than have some 440px card promoted in its place.
+  const isFullBleed = c => viewport > 0 && c.width > viewport * 0.97;
+  const constrainedPick = dominant(candidates.filter(c => !isFullBleed(c)));
+  const bleedPick = dominant(candidates.filter(isFullBleed));
+
+  let pick = constrainedPick;
+  let fullBleed = false;
+  if (bleedPick && (!constrainedPick || constrainedPick.area < bleedPick.area * 0.33)) {
+    pick = bleedPick;
+    fullBleed = true;
+  }
+
+  const gutters = (pick?.pool || [])
+    .filter(c => Math.abs(c.width - pick.width) <= pick.width * 0.08)
+    .map(c => c.gutter)
+    .filter(g => g != null && g > 0)
+    .map(Math.round);
   const gutterLadder = clusterBy(gutters).slice(0, 4);
-  const container = widthLadder[0]
+
+  const container = pick
     ? {
-        contentWidth: widthLadder[0].value,
+        contentWidth: pick.width,
         gutter: gutterLadder[0]?.value ?? null,
-        usage: widthLadder[0].count,
-        ladder: widthLadder.map(w => w.value).sort((a, b) => a - b),
+        usage: pick.ladder.find(w => w.value === pick.width)?.count ?? 1,
+        fullBleed,
+        // The widest constrained block under a full-bleed shell — the number
+        // a clone needs for its inner wrapper.
+        innerWidth: fullBleed ? (constrainedPick?.width ?? null) : null,
+        ladder: clusterBy(candidates.map(c => c.width)).slice(0, 6).map(w => w.value).sort((a, b) => a - b),
       }
     : null;
 

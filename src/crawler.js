@@ -584,6 +584,7 @@ async function extractPageData(page, ignoreSelectors, scopeSelector) {
     }
 
     const results = {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
       computedStyles: [],
       cssVariables: {},
       mediaQueries: [],
@@ -681,6 +682,10 @@ async function extractPageData(page, ignoreSelectors, scopeSelector) {
     }
 
     let sourceAttrBudget = 500;
+    // Range measurement is the expensive part of this loop — cap it.
+    let lineWidthBudget = 120;
+    const PROSE_TAGS = new Set(['p', 'li', 'blockquote', 'dd']);
+
     for (const el of elements) {
       const cs = getComputedStyle(el);
       const tag = el.tagName.toLowerCase();
@@ -700,6 +705,25 @@ async function extractPageData(page, ignoreSelectors, scopeSelector) {
         sourceAttrBudget--;
       }
 
+      // Rendered line width for prose. A paragraph's box is as wide as its
+      // container; the text inside it usually is not, so measuring the box
+      // reports a line length nobody is actually reading. A Range over the
+      // element's own text gives the real line boxes.
+      let lineWidth = null;
+      if (lineWidthBudget > 0 && PROSE_TAGS.has(tag)) {
+        try {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const rects = range.getClientRects();
+          let widest = 0;
+          for (const r of rects) {
+            if (r.height > 0 && r.width > widest) widest = r.width;
+          }
+          if (widest > 0) lineWidth = Math.round(widest);
+          lineWidthBudget--;
+        } catch { /* detached or unmeasurable */ }
+      }
+
       // hasText: at least one direct text-node child with visible characters —
       // lets downstream extractors filter decorative spans/divs out of WCAG
       // contrast accounting.
@@ -709,7 +733,7 @@ async function extractPageData(page, ignoreSelectors, scopeSelector) {
       }
 
       results.computedStyles.push({
-        tag, classList, role, area, hasText,
+        tag, classList, role, area, hasText, lineWidth,
         // Box geometry — measure (chars per line), container ladders and
         // section rhythm all need the rendered width, not just the area.
         width: Math.round(rect.width),

@@ -188,8 +188,6 @@ export function inferTypeRatio(sizes) {
 
 // ── Role naming ─────────────────────────────────────────────────
 
-const ROLE_ORDER = ['display', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body-lg', 'body', 'body-sm', 'caption'];
-
 function roleFromTags(tags) {
   const heading = tags.find(t => /^h[1-6]$/.test(t));
   return heading || null;
@@ -221,10 +219,16 @@ function nameScale(scale, bodySize) {
       continue;
     }
     if (bodySize != null && step.size > bodySize) {
-      const candidates = ROLE_ORDER.filter(r => !claimed.has(r) && r !== 'body' && !r.startsWith('body-') && r !== 'caption');
-      step.role = candidates[aboveIdx] || `xl-${aboveIdx + 1}`;
-      if (candidates[aboveIdx]) claimed.add(candidates[aboveIdx]);
-      aboveIdx++;
+      // `display` belongs to the largest step on the page and nothing else —
+      // handing it to whatever untagged size came first put a 32px step
+      // above a 48px <h1>. Everything else becomes an ordered title rung.
+      if (step === named[0] && !claimed.has('display')) {
+        step.role = 'display';
+        claimed.add('display');
+      } else {
+        aboveIdx++;
+        step.role = `title-${aboveIdx}`;
+      }
     } else {
       const candidates = ['body-sm', 'caption', 'micro'].filter(r => !claimed.has(r));
       step.role = candidates[belowIdx] || `sm-${belowIdx + 1}`;
@@ -244,23 +248,51 @@ function nameScale(scale, bodySize) {
 const TEXT_TAGS = new Set(['p', 'li', 'blockquote']);
 
 function measureFrom(computedStyles) {
-  const samples = [];
+  const blocks = [];
   for (const el of computedStyles) {
     if (!TEXT_TAGS.has(el.tag)) continue;
-    const width = typeof el.width === 'number' ? el.width : null;
+    // Prefer the measured line box over the element box: a paragraph is as
+    // wide as its container, its text usually is not.
+    const width = typeof el.lineWidth === 'number' && el.lineWidth > 0
+      ? el.lineWidth
+      : (typeof el.width === 'number' ? el.width : null);
     const size = parseCSSValue(el.fontSize)?.value;
     if (!width || !size || width < 120) continue;
-    // ~0.5em average glyph advance for latin text at normal tracking.
-    samples.push(width / (size * 0.5));
+    blocks.push({ width, size, measured: typeof el.lineWidth === 'number' && el.lineWidth > 0 });
   }
-  if (samples.length === 0) return null;
+  if (blocks.length === 0) return null;
+
+  // Only prose columns count. A page's <p> elements include nav blurbs,
+  // footer links and card captions; measuring the median across all of them
+  // reports the width of the narrowest furniture, not of the reading column.
+  const widest = Math.max(...blocks.map(b => b.width));
+  let prose = blocks.filter(b => b.width >= widest * 0.5);
+  if (prose.length < 3 && blocks.length < 8) {
+    // A page with barely any paragraphs at all — widen the net to the top
+    // third by width rather than reporting a one-sample measure as fact.
+    // (A page with plenty of narrow paragraphs keeps the strict filter: the
+    // narrow ones are furniture, not the reading column.)
+    const byWidth = [...blocks].sort((a, b) => b.width - a.width);
+    prose = byWidth.slice(0, Math.max(1, Math.ceil(byWidth.length / 3)));
+  }
+  // ~0.5em average glyph advance for latin text at normal tracking.
+  const samples = prose.map(b => b.width / (b.size * 0.5));
   samples.sort((a, b) => a - b);
   const median = samples[Math.floor(samples.length / 2)];
   const cpl = Math.round(median);
   let verdict = 'comfortable';
   if (cpl < 45) verdict = 'narrow';
   else if (cpl > 75) verdict = 'wide';
-  return { charsPerLine: cpl, verdict, samples: samples.length };
+  // Sample count is the honest caveat: a page with two paragraphs gives a
+  // number, not a measurement.
+  const confidence = samples.length >= 5 ? 'high' : samples.length >= 2 ? 'medium' : 'low';
+  return {
+    charsPerLine: cpl,
+    verdict,
+    confidence,
+    samples: samples.length,
+    measured: prose.every(b => b.measured),
+  };
 }
 
 // ── Rhythm ladders ──────────────────────────────────────────────
@@ -385,12 +417,18 @@ export function extractTypography(computedStyles, options = {}) {
       count: fontSizeFluid.length,
       // A clamp with no viewport unit in its preferred term is inert.
       inertCount: fontSizeFluid.filter(f => f.kind === 'clamp' && !f.scales).length,
-      range: fontSizeFluid.length
-        ? {
-            minPx: Math.min(...fontSizeFluid.map(f => f.minPx).filter(v => v != null)),
-            maxPx: Math.max(...fontSizeFluid.map(f => f.maxPx).filter(v => v != null)),
-          }
-        : null,
+      range: (() => {
+        // Only declarations we could actually resolve to px contribute —
+        // `min(var(--heading-md), 2.75vw)` is fluid but unmeasurable here.
+        const mins = fontSizeFluid.map(f => f.minPx).filter(v => v != null);
+        const maxes = fontSizeFluid.map(f => f.maxPx).filter(v => v != null);
+        if (mins.length === 0 && maxes.length === 0) return null;
+        return {
+          minPx: mins.length ? Math.min(...mins) : null,
+          maxPx: maxes.length ? Math.max(...maxes) : null,
+        };
+      })(),
+      resolvedCount: fontSizeFluid.filter(f => f.minPx != null || f.maxPx != null).length,
     },
     sizeCount: scale.length,
     familyCount: families.length,
