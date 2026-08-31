@@ -224,6 +224,9 @@ export async function crawlPage(url, options = {}) {
         Object.assign(lightData.cssVariables, ap.data.cssVariables);
         lightData.mediaQueries.push(...ap.data.mediaQueries);
         lightData.keyframes.push(...ap.data.keyframes);
+        if (ap.data.fluidValues) {
+          lightData.fluidValues = [...(lightData.fluidValues || []), ...ap.data.fluidValues];
+        }
       }
       // Deduplicate media queries and keyframes
       lightData.mediaQueries = [...new Set(lightData.mediaQueries)];
@@ -707,6 +710,11 @@ async function extractPageData(page, ignoreSelectors, scopeSelector) {
 
       results.computedStyles.push({
         tag, classList, role, area, hasText,
+        // Box geometry — measure (chars per line), container ladders and
+        // section rhythm all need the rendered width, not just the area.
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        top: Math.round(rect.top + window.scrollY),
         color: cs.color,
         backgroundColor: cs.backgroundColor,
         backgroundImage: cs.backgroundImage,
@@ -818,6 +826,12 @@ async function extractPageData(page, ignoreSelectors, scopeSelector) {
     results.containerQueries = [];
     results.envUsage = [];
     results.modernColors = [];
+    // Fluid/responsive declarations. Computed styles resolve clamp() and vw
+    // units down to a single px value at the capture viewport, so the only
+    // place a site's *fluid* intent survives is the authored declaration.
+    results.fluidValues = [];
+    const FLUID_PROPS = ['font-size', 'line-height', 'letter-spacing', 'padding', 'padding-top', 'padding-bottom', 'padding-inline', 'padding-block', 'gap', 'row-gap', 'column-gap', 'width', 'max-width', 'margin-block', 'border-radius'];
+    const FLUID_VALUE_RE = /clamp\(|min\(|max\(|calc\(|[\d.]+\s*v(?:w|h|min|max|i|b)\b/i;
     const MODERN_COLOR_RE = /(oklch\([^)]+\)|oklab\([^)]+\)|color-mix\([^)]+\)|light-dark\([^)]+\)|color\(\s*display-p3[^)]+\)|color\(\s*rec2020[^)]+\))/gi;
     function walkRulesForContainersAndEnv(rules) {
       for (const rule of rules) {
@@ -862,6 +876,16 @@ async function extractPageData(page, ignoreSelectors, scopeSelector) {
               selectorText: '',
               declarationCount: 0,
             });
+          }
+          // Fluid declarations (clamp/vw/min/max) — capped so a huge
+          // stylesheet can't blow up the payload.
+          if (rule.style && results.fluidValues.length < 400) {
+            for (const prop of FLUID_PROPS) {
+              const v = rule.style.getPropertyValue(prop);
+              if (v && FLUID_VALUE_RE.test(v)) {
+                results.fluidValues.push({ property: prop, value: v.trim(), selector: (rule.selectorText || '').slice(0, 120) });
+              }
+            }
           }
           // env() scan on declaration text
           if (rule.style) {
@@ -1105,6 +1129,13 @@ function parseCrossOriginCSS(cssText, data) {
   if (!data.containerQueries) data.containerQueries = [];
   for (const m of cssText.matchAll(/@container\s*([^{]*)\{/g)) {
     data.containerQueries.push({ condition: m[1].trim(), selectorText: '', declarationCount: 0 });
+  }
+  // Fluid declarations from cross-origin sheets fetched as text.
+  if (!data.fluidValues) data.fluidValues = [];
+  const FLUID_TEXT_RE = /(font-size|line-height|letter-spacing|gap|padding|padding-block|padding-inline|max-width|width|border-radius)\s*:\s*([^;}]*(?:clamp\(|[\d.]+v(?:w|h|min|max)\b)[^;}]*)/gi;
+  for (const m of cssText.matchAll(FLUID_TEXT_RE)) {
+    if (data.fluidValues.length >= 400) break;
+    data.fluidValues.push({ property: m[1].toLowerCase(), value: m[2].trim(), selector: '' });
   }
   // env() usage
   if (!data.envUsage) data.envUsage = [];

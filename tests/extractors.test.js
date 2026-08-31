@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { extractColors } from '../src/extractors/colors.js';
-import { extractTypography } from '../src/extractors/typography.js';
+import { extractTypography, inferTypeRatio, parseFluidValue } from '../src/extractors/typography.js';
 import { extractSpacing } from '../src/extractors/spacing.js';
 import { extractShadows } from '../src/extractors/shadows.js';
 import { extractBorders } from '../src/extractors/borders.js';
@@ -871,5 +871,104 @@ describe('clusterComponents', () => {
     const out = clusterComponents(els);
     assert.equal(out.length, 1);
     assert.equal(out[0].variants.length, 2);
+  });
+});
+
+// ── Typography system (v13.2) ───────────────────────────────────
+
+describe('typography system', () => {
+  const typeEl = (o) => makeEl({ width: 700, ...o });
+  const styles = [
+    typeEl({ tag: 'h1', fontSize: '48px', fontWeight: '700', letterSpacing: '-0.02em' }),
+    typeEl({ tag: 'h2', fontSize: '32px', fontWeight: '700' }),
+    typeEl({ tag: 'h3', fontSize: '24px', fontWeight: '600' }),
+    typeEl({ tag: 'p', fontSize: '16px', width: 640 }),
+    typeEl({ tag: 'p', fontSize: '16px', width: 640 }),
+    typeEl({ tag: 'span', fontSize: '13px' }),
+  ];
+
+  it('infers a modular ratio from a clean scale', () => {
+    const ratio = inferTypeRatio([16, 20, 25, 31, 39]);
+    assert.equal(ratio.name, 'major third');
+    assert.equal(ratio.value, 1.25);
+    assert.ok(ratio.fit > 0.8);
+    assert.equal(ratio.coverage, 1);
+    assert.equal(ratio.anchor, 16);
+  });
+
+  it('refuses to name a ratio for an irregular scale', () => {
+    const ratio = inferTypeRatio([16, 17, 18, 19, 20, 44]);
+    assert.equal(ratio.value, null);
+    assert.equal(ratio.name, 'irregular');
+    assert.equal(ratio.coverage, 0);
+  });
+
+  it('does not let a small ratio explain everything with big powers', () => {
+    // 1.067^4 lands within 3% of a perfect fourth — without a power penalty
+    // the minor second wins every scale it is offered.
+    const ratio = inferTypeRatio([16, 21.3, 28.4, 37.9]);
+    assert.equal(ratio.name, 'perfect fourth');
+  });
+
+  it('parses clamp() into min/max px', () => {
+    const f = parseFluidValue('clamp(2rem, 4vw + 1rem, 4rem)');
+    assert.equal(f.kind, 'clamp');
+    assert.equal(f.minPx, 32);
+    assert.equal(f.maxPx, 64);
+    assert.equal(f.scales, true);
+  });
+
+  it('flags a clamp whose middle term never scales', () => {
+    const f = parseFluidValue('clamp(1rem, 2rem, 3rem)');
+    assert.equal(f.scales, false);
+  });
+
+  it('parses bare viewport units', () => {
+    const f = parseFluidValue('5vw', { maxViewport: 1440 });
+    assert.equal(f.kind, 'viewport');
+    assert.equal(f.maxPx, 72);
+  });
+
+  it('returns null for a static value', () => {
+    assert.equal(parseFluidValue('18px'), null);
+  });
+
+  it('names every step in the scale', () => {
+    const t = extractTypography(styles);
+    const roles = t.roleScale.map(s => s.role);
+    assert.deepEqual(roles.slice(0, 3), ['h1', 'h2', 'h3']);
+    assert.ok(roles.includes('body'));
+    assert.ok(roles.every(Boolean));
+  });
+
+  it('measures line length for body text', () => {
+    const t = extractTypography(styles);
+    assert.equal(t.system.measure.charsPerLine, 80);
+    assert.equal(t.system.measure.verdict, 'wide');
+  });
+
+  it('reports no measure when there is no body copy', () => {
+    const t = extractTypography([makeEl({ tag: 'div', width: 400 })]);
+    assert.equal(t.system.measure, null);
+  });
+
+  it('folds fluid declarations into the system summary', () => {
+    const t = extractTypography(styles, {
+      fluidValues: [
+        { property: 'font-size', value: 'clamp(2rem, 4vw, 4rem)', selector: 'h1' },
+        { property: 'font-size', value: 'clamp(1rem, 1rem, 1.2rem)', selector: 'p' },
+        { property: 'gap', value: 'clamp(1rem, 2vw, 2rem)', selector: '.grid' },
+      ],
+    });
+    assert.equal(t.system.fluid.isFluid, true);
+    assert.equal(t.system.fluid.count, 2);
+    assert.equal(t.system.fluid.inertCount, 1);
+    assert.equal(t.system.fluid.range.maxPx, 64);
+  });
+
+  it('builds line-height and tracking ladders', () => {
+    const t = extractTypography(styles);
+    assert.ok(t.lineHeights.length > 0);
+    assert.deepEqual(t.tracking.map(x => x.value), ['-0.02em']);
   });
 });

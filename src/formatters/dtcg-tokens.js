@@ -117,7 +117,15 @@ function buildPrimitive(design) {
     if (fv) fontFamily[`f${i}`] = token(fv, 'fontFamily');
   }
 
-  return { color, spacing, radius, shadow, fontFamily };
+  // Font sizes keyed by their role (`h1`, `body`, `caption`) rather than an
+  // index — the same size ladder, addressable.
+  const fontSize = {};
+  for (const step of design.typography?.roleScale || []) {
+    const fv = fontSizeValue(step.size);
+    if (fv && step.role && !fontSize[step.role]) fontSize[step.role] = token(fv, 'dimension');
+  }
+
+  return { color, spacing, radius, shadow, fontFamily, fontSize };
 }
 
 function buildSemantic(design, primitive) {
@@ -140,15 +148,30 @@ function buildSemantic(design, primitive) {
   }
 
   const firstFamily = fontFamilyValue(design.typography?.families?.[0]) || 'system-ui';
-  const firstScale = design.typography?.scale?.[0] || {};
+  // `scale` is sorted largest-first, so scale[0] is the display size — using
+  // it for `typography.body` shipped the headline size as body text.
+  const bodyStep = design.typography?.body
+    || (design.typography?.roleScale || []).find(s => s.role === 'body')
+    || design.typography?.scale?.[0]
+    || {};
   const typography = {
     body: token({
       fontFamily: firstFamily,
-      fontSize: fontSizeValue(firstScale.size) || '16px',
-      fontWeight: firstScale.weight || '400',
-      lineHeight: firstScale.lineHeight || '1.5',
+      fontSize: fontSizeValue(bodyStep.size) || '16px',
+      fontWeight: bodyStep.weight || '400',
+      lineHeight: bodyStep.lineHeight || '1.5',
     }, 'typography'),
   };
+  const headingStep = (design.typography?.roleScale || []).find(s => s.role === 'h1')
+    || design.typography?.headings?.[0];
+  if (headingStep) {
+    typography.heading = token({
+      fontFamily: firstFamily,
+      fontSize: fontSizeValue(headingStep.size) || '32px',
+      fontWeight: headingStep.weight || '700',
+      lineHeight: headingStep.lineHeight || '1.2',
+    }, 'typography');
+  }
 
   const radius = {
     control: token(ref(`primitive.radius.${firstRadiusKey}`), 'dimension'),

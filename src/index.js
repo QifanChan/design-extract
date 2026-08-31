@@ -65,7 +65,7 @@ export async function extractDesignLanguage(url, options = {}) {
       pagesAnalyzed: rawData.pagesAnalyzed || 1,
     },
     colors: safeExtract(extractColors, styles) || { primary: null, secondary: null, accent: null, neutrals: [], backgrounds: [], text: [], gradients: [], all: [] },
-    typography: safeExtract(extractTypography, styles) || { families: [], scale: [] },
+    typography: safeExtract(extractTypography, styles, { fluidValues: rawData.light.fluidValues || [], viewportWidth: rawData.light.viewportWidth }) || { families: [], scale: [] },
     spacing: safeExtract(extractSpacing, styles) || { scale: [], base: null },
     shadows: safeExtract(extractShadows, styles) || { values: [] },
     borders: safeExtract(extractBorders, styles) || { radii: [] },

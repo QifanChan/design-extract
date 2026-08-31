@@ -87,6 +87,52 @@ export function formatMarkdown(design) {
     lines.push('');
   }
 
+  const sys = typography.system;
+  if (sys) {
+    lines.push('### Type System');
+    lines.push('');
+    if (sys.ratio?.value) {
+      lines.push(`- **Scale ratio** — ${sys.ratio.value} (${sys.ratio.name}), anchored at ${sys.ratio.anchor}px · ${Math.round(sys.ratio.coverage * 100)}% of sizes sit on the ladder`);
+    } else if (sys.ratio) {
+      lines.push(`- **Scale ratio** — irregular (${sys.ratio.steps} distinct sizes, no modular ratio fits)`);
+    }
+    if (sys.measure) {
+      lines.push(`- **Measure** — ~${sys.measure.charsPerLine} characters per line (${sys.measure.verdict})`);
+    }
+    if (sys.fluid?.isFluid) {
+      const r = sys.fluid.range;
+      lines.push(`- **Fluid type** — ${sys.fluid.count} clamp/viewport font sizes${r ? `, ${Math.round(r.minPx)}px → ${Math.round(r.maxPx)}px` : ''}`);
+      if (sys.fluid.inertCount > 0) {
+        lines.push(`  - ⚠ ${sys.fluid.inertCount} clamp() ${sys.fluid.inertCount === 1 ? 'value has' : 'values have'} no viewport unit in the preferred term — they never scale.`);
+      }
+    } else {
+      lines.push('- **Fluid type** — none; sizes are fixed per breakpoint');
+    }
+    lines.push('');
+  }
+
+  if (typography.roleScale?.length > 0) {
+    lines.push('### Named Scale');
+    lines.push('');
+    lines.push('| Role | Size | Weight | Line Height | Tracking |');
+    lines.push('|------|------|--------|-------------|----------|');
+    for (const r of typography.roleScale.slice(0, 15)) {
+      lines.push(`| \`${r.role}\` | ${r.size}px / ${pxToRem(r.size)}rem | ${r.weight} | ${r.lineHeight} | ${r.letterSpacing} |`);
+    }
+    lines.push('');
+  }
+
+  if (typography.fluid?.length > 0) {
+    lines.push('### Fluid Declarations');
+    lines.push('');
+    lines.push('```css');
+    for (const f of typography.fluid.slice(0, 10)) {
+      lines.push(`${f.selector || '/* … */'} { ${f.property}: ${f.raw}; }`);
+    }
+    lines.push('```');
+    lines.push('');
+  }
+
   if (typography.scale.length > 0) {
     lines.push('### Type Scale');
     lines.push('');
