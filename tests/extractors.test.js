@@ -309,6 +309,57 @@ describe('extractShadows', () => {
       assert.ok(shadows.values[i].blur >= shadows.values[i - 1].blur);
     }
   });
+
+  it('parses multi-layer shadows from the key layer, not the whole string', () => {
+    const shadows = extractShadows([
+      makeEl({ boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.1)' }),
+    ]);
+    const s = shadows.values[0];
+    assert.equal(s.layerCount, 2);
+    assert.equal(s.blur, 15);
+    assert.equal(s.offsetY, 10);
+    assert.equal(s.spread, -3);
+    assert.equal(s.label, 'lg');
+  });
+
+  it('builds an ordered elevation ladder and drops near-duplicates', () => {
+    const shadows = extractShadows([
+      makeEl({ boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }),
+      makeEl({ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }),
+      makeEl({ boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }),
+      makeEl({ boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }),
+    ]);
+    assert.equal(shadows.elevation.length, 2);
+    assert.deepEqual(shadows.elevation.map(e => e.name), ['xs', 'sm']);
+    // The most-used raw value wins its bucket.
+    assert.equal(shadows.elevation[0].raw, '0 1px 3px rgba(0,0,0,0.06)');
+    assert.ok(shadows.elevation[0].visualWeight < shadows.elevation[1].visualWeight);
+    assert.equal(shadows.system.redundancy, 1.5);
+  });
+
+  it('flags brand-tinted shadows', () => {
+    const shadows = extractShadows([
+      makeEl({ boxShadow: '0 8px 24px rgba(79, 70, 229, 0.35)' }),
+    ]);
+    assert.equal(shadows.values[0].tint.kind, 'colored');
+    assert.equal(shadows.values[0].tint.alpha, 0.35);
+    assert.equal(shadows.system.tint, 'colored');
+  });
+
+  it('reads neutral black shadows as neutral', () => {
+    const shadows = extractShadows([makeEl({ boxShadow: '0 4px 12px rgba(0,0,0,0.15)' })]);
+    assert.equal(shadows.values[0].tint.kind, 'neutral');
+    assert.equal(shadows.system.tint, 'neutral');
+  });
+
+  it('keeps inset shadows out of the elevation ladder', () => {
+    const shadows = extractShadows([
+      makeEl({ boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06)' }),
+      makeEl({ boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }),
+    ]);
+    assert.equal(shadows.elevation.length, 1);
+    assert.equal(shadows.system.insetCount, 1);
+  });
 });
 
 // ── extractBorders ──────────────────────────────────────────────

@@ -155,11 +155,26 @@ export function formatMarkdown(design) {
   }
 
   // ── Shadows ──
-  if (shadows.values.length > 0) {
-    lines.push('## Box Shadows');
+  if (shadows.elevation?.length > 0) {
+    lines.push('## Elevation');
     lines.push('');
-    for (const s of shadows.values) {
-      lines.push(`**${s.label}${s.inset ? ' (inset)' : ''}** — blur: ${s.blur}px`);
+    lines.push(`${shadows.system.levels} levels from ${shadows.system.rawCount} raw shadows · ${shadows.system.tint} tint`);
+    lines.push('');
+    for (const e of shadows.elevation) {
+      const tint = e.tint.kind === 'colored' ? ` · tinted (hue ${e.tint.hue}°)` : '';
+      const layered = e.layerCount > 1 ? ` · ${e.layerCount} layers` : '';
+      lines.push(`**${e.name}** — blur ${e.blur}px, y ${e.offsetY}px, used ${e.usage}×${layered}${tint}`);
+      lines.push('```css');
+      lines.push(`box-shadow: ${e.raw};`);
+      lines.push('```');
+      lines.push('');
+    }
+  }
+  const insets = shadows.values.filter(s => s.inset);
+  if (insets.length > 0) {
+    lines.push('## Inset Shadows');
+    lines.push('');
+    for (const s of insets) {
       lines.push('```css');
       lines.push(`box-shadow: ${s.raw};`);
       lines.push('```');

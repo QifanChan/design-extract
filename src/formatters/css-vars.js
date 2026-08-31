@@ -75,10 +75,15 @@ export function formatCssVars(design) {
   }
 
   // Shadows
-  if (design.shadows.values.length > 0) {
+  // Emit the deduped elevation ladder — `label` alone collides (a site can
+  // have three distinct `md` shadows), which silently dropped tokens.
+  const shadowLadder = design.shadows.elevation?.length
+    ? design.shadows.elevation.map(e => [e.name, e.raw])
+    : design.shadows.values.map(s => [s.label, s.raw]);
+  if (shadowLadder.length > 0) {
     lines.push('  /* Box Shadows */');
-    for (const s of design.shadows.values) {
-      lines.push(`  --shadow-${s.label}: ${s.raw};`);
+    for (const [name, raw] of shadowLadder) {
+      lines.push(`  --shadow-${name}: ${raw};`);
     }
     lines.push('');
   }
