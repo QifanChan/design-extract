@@ -5,3 +5,11 @@ test-output/
 .DS_Store
 .vercel/
 .vercel
+.npmrc
+
+# Internal planning, never push
+STRATEGY.md
+NOTES.md
+PLAN.md
+.planning/
+.engram/

@@ -27,6 +27,52 @@ export function formatMarkdown(design) {
     lines.push('');
   }
 
+  if (colors.ramps && Object.keys(colors.ramps).length > 0) {
+    lines.push('### Tonal Ramps');
+    lines.push('');
+    lines.push('Generated in OKLCH from each role colour, so the steps are perceptually even. The site\'s own colour keeps its position in the ladder.');
+    lines.push('');
+    const stepNames = Object.keys(Object.values(colors.ramps)[0].steps);
+    lines.push(`| Role | ${stepNames.join(' | ')} |`);
+    lines.push(`|------|${stepNames.map(() => '-----').join('|')}|`);
+    for (const [role, ramp] of Object.entries(colors.ramps)) {
+      const cells = stepNames.map(n => (n === ramp.anchor ? `**\`${ramp.steps[n]}\`**` : `\`${ramp.steps[n]}\``));
+      lines.push(`| ${role} | ${cells.join(' | ')} |`);
+    }
+    lines.push('');
+  }
+
+  if (colors.pairs?.length > 0) {
+    lines.push('### Semantic Pairs');
+    lines.push('');
+    lines.push('| Role | Background | Foreground | Contrast | Level |');
+    lines.push('|------|------------|------------|----------|-------|');
+    for (const p of colors.pairs) {
+      const flag = p.unresolvable ? ' ⚠' : (p.fromPalette ? '' : ' *');
+      lines.push(`| \`${p.role}\` | \`${p.background}\` | \`${p.foreground || '—'}\` | ${p.ratio ?? '—'}:1 | ${p.level}${flag} |`);
+    }
+    lines.push('');
+    if (colors.pairs.some(p => !p.fromPalette)) {
+      lines.push('\\* No colour the site already uses for text reaches 4.5:1 on that surface — the foreground shown is black or white, substituted in.');
+      lines.push('');
+    }
+    if (colors.pairs.some(p => p.unresolvable)) {
+      lines.push('⚠ marks a surface where nothing, not even black or white, reaches 4.5:1.');
+      lines.push('');
+    }
+  }
+
+  if (colors.dominance?.length > 0) {
+    lines.push('### Dominance');
+    lines.push('');
+    lines.push('Share of painted background area — what the page looks like, as opposed to what it declares most often.');
+    lines.push('');
+    for (const d of colors.dominance.slice(0, 6)) {
+      lines.push(`- \`${d.hex}\` — ${Math.round(d.areaShare * 100)}%`);
+    }
+    lines.push('');
+  }
+
   if (colors.neutrals.length > 0) {
     lines.push('### Neutral Colors');
     lines.push('');
@@ -84,6 +130,52 @@ export function formatMarkdown(design) {
     for (const f of typography.families) {
       lines.push(`- **${f.name}** — used for ${f.usage} (${f.count} elements)`);
     }
+    lines.push('');
+  }
+
+  const sys = typography.system;
+  if (sys) {
+    lines.push('### Type System');
+    lines.push('');
+    if (sys.ratio?.value) {
+      lines.push(`- **Scale ratio** — ${sys.ratio.value} (${sys.ratio.name}), anchored at ${sys.ratio.anchor}px · ${Math.round(sys.ratio.coverage * 100)}% of sizes sit on the ladder`);
+    } else if (sys.ratio) {
+      lines.push(`- **Scale ratio** — irregular (${sys.ratio.steps} distinct sizes, no modular ratio fits)`);
+    }
+    if (sys.measure) {
+      lines.push(`- **Measure** — ~${sys.measure.charsPerLine} characters per line (${sys.measure.verdict}${sys.measure.confidence === 'high' ? '' : `, ${sys.measure.confidence} confidence from ${sys.measure.samples} ${sys.measure.samples === 1 ? 'sample' : 'samples'}`})`);
+    }
+    if (sys.fluid?.isFluid) {
+      const r = sys.fluid.range;
+      lines.push(`- **Fluid type** — ${sys.fluid.count} clamp/viewport font sizes${r ? `, ${Math.round(r.minPx)}px → ${Math.round(r.maxPx)}px` : ''}`);
+      if (sys.fluid.inertCount > 0) {
+        lines.push(`  - ⚠ ${sys.fluid.inertCount} clamp() ${sys.fluid.inertCount === 1 ? 'value has' : 'values have'} no viewport unit in the preferred term — they never scale.`);
+      }
+    } else {
+      lines.push('- **Fluid type** — none; sizes are fixed per breakpoint');
+    }
+    lines.push('');
+  }
+
+  if (typography.roleScale?.length > 0) {
+    lines.push('### Named Scale');
+    lines.push('');
+    lines.push('| Role | Size | Weight | Line Height | Tracking |');
+    lines.push('|------|------|--------|-------------|----------|');
+    for (const r of typography.roleScale.slice(0, 15)) {
+      lines.push(`| \`${r.role}\` | ${r.size}px / ${pxToRem(r.size)}rem | ${r.weight} | ${r.lineHeight} | ${r.letterSpacing} |`);
+    }
+    lines.push('');
+  }
+
+  if (typography.fluid?.length > 0) {
+    lines.push('### Fluid Declarations');
+    lines.push('');
+    lines.push('```css');
+    for (const f of typography.fluid.slice(0, 10)) {
+      lines.push(`${f.selector || '/* … */'} { ${f.property}: ${f.raw}; }`);
+    }
+    lines.push('```');
     lines.push('');
   }
 
@@ -155,11 +247,26 @@ export function formatMarkdown(design) {
   }
 
   // ── Shadows ──
-  if (shadows.values.length > 0) {
-    lines.push('## Box Shadows');
+  if (shadows.elevation?.length > 0) {
+    lines.push('## Elevation');
     lines.push('');
-    for (const s of shadows.values) {
-      lines.push(`**${s.label}${s.inset ? ' (inset)' : ''}** — blur: ${s.blur}px`);
+    lines.push(`${shadows.system.levels} levels from ${shadows.system.rawCount} raw shadows · ${shadows.system.tint} tint`);
+    lines.push('');
+    for (const e of shadows.elevation) {
+      const tint = e.tint.kind === 'colored' ? ` · tinted (hue ${e.tint.hue}°)` : '';
+      const layered = e.layerCount > 1 ? ` · ${e.layerCount} layers` : '';
+      lines.push(`**${e.name}** — blur ${e.blur}px, y ${e.offsetY}px, used ${e.usage}×${layered}${tint}`);
+      lines.push('```css');
+      lines.push(`box-shadow: ${e.raw};`);
+      lines.push('```');
+      lines.push('');
+    }
+  }
+  const insets = shadows.values.filter(s => s.inset);
+  if (insets.length > 0) {
+    lines.push('## Inset Shadows');
+    lines.push('');
+    for (const s of insets) {
       lines.push('```css');
       lines.push(`box-shadow: ${s.raw};`);
       lines.push('```');
@@ -168,15 +275,32 @@ export function formatMarkdown(design) {
   }
 
   // ── CSS Variables ──
-  const varCategories = Object.entries(variables).filter(([, v]) => Object.keys(v).length > 0);
+  // Flatten each category to [name, value] leaves. Some categories (e.g.
+  // `semantic`) nest one level deeper — { success: { '--x': '#0a0' } } — so we
+  // render the inner vars, not the group objects (which stringified to
+  // `[object Object]`, #135).
+  const flattenVars = (vars) => {
+    const out = [];
+    for (const [name, value] of Object.entries(vars)) {
+      if (value && typeof value === 'object') {
+        for (const [sub, subVal] of Object.entries(value)) out.push([sub, subVal]);
+      } else {
+        out.push([name, value]);
+      }
+    }
+    return out;
+  };
+  const varCategories = Object.entries(variables)
+    .map(([category, vars]) => [category, flattenVars(vars)])
+    .filter(([, pairs]) => pairs.length > 0);
   if (varCategories.length > 0) {
     lines.push('## CSS Custom Properties');
     lines.push('');
-    for (const [category, vars] of varCategories) {
+    for (const [category, pairs] of varCategories) {
       lines.push(`### ${category.charAt(0).toUpperCase() + category.slice(1)}`);
       lines.push('');
       lines.push('```css');
-      for (const [name, value] of Object.entries(vars)) {
+      for (const [name, value] of pairs) {
         lines.push(`${name}: ${value};`);
       }
       lines.push('```');
@@ -202,7 +326,7 @@ export function formatMarkdown(design) {
     lines.push('');
 
     if (animations.easings.length > 0) {
-      lines.push(`**Easing functions:** ${animations.easings.map(e => `\`${e}\``).join(', ')}`);
+      lines.push(`**Easing functions:** ${animations.easings.map(e => `\`${typeof e === 'string' ? e : e.value}\``).join(', ')}`);
       lines.push('');
     }
     if (animations.durations.length > 0) {
@@ -249,7 +373,7 @@ export function formatMarkdown(design) {
       lines.push(`### ${name.charAt(0).toUpperCase() + name.slice(1)} (${comp.count} instances)`);
       lines.push('');
       lines.push('```css');
-      lines.push(`.${name.slice(0, -1)} {`);
+      lines.push(`.${name} {`);
       for (const [prop, val] of Object.entries(comp.baseStyle)) {
         const cssProp = prop.replace(/([A-Z])/g, '-$1').toLowerCase();
         lines.push(`  ${cssProp}: ${val};`);
@@ -291,6 +415,40 @@ export function formatMarkdown(design) {
     lines.push('');
     lines.push(`**${l.gridCount} grid containers** and **${l.flexCount} flex containers** detected.`);
     lines.push('');
+
+    if (l.system) {
+      const sy = l.system;
+      lines.push('### The System');
+      lines.push('');
+      if (sy.container) {
+        lines.push(`- **Content column** — ${sy.container.contentWidth}px wide${sy.container.fullBleed ? ' (full-bleed — no constrained container found)' : ''}${sy.container.gutter != null ? `, ${sy.container.gutter}px gutters` : ''}${sy.density != null ? ` (${Math.round(sy.density * 100)}% edge density)` : ''}`);
+        if (sy.container.fullBleed && sy.container.innerWidth) {
+          lines.push(`  - Widest constrained block inside it: ${sy.container.innerWidth}px`);
+        }
+        if (sy.container.ladder.length > 1) {
+          lines.push(`  - Width ladder: ${sy.container.ladder.map(w => `${w}px`).join(' · ')}`);
+        }
+      }
+      if (sy.columns) {
+        lines.push(`- **Column system** — ${sy.columns.dominant} columns${sy.columns.canonical ? ' (canonical page grid)' : ''}`);
+      }
+      if (sy.rhythm) {
+        lines.push(`- **Section rhythm** — ${sy.rhythm.section}px vertical padding (ladder: ${sy.rhythm.ladder.map(r => `${r}px`).join(' · ')})`);
+      }
+      if (sy.gapScale?.length > 0) {
+        lines.push(`- **Gap scale** — ${sy.gapScale.map(g => `${g}px`).join(' · ')}`);
+      }
+      if (sy.fluid?.count > 0) {
+        lines.push(`- **Fluid layout** — ${sy.fluid.count} clamp/viewport declarations`);
+        lines.push('');
+        lines.push('```css');
+        for (const f of sy.fluid.declarations.slice(0, 6)) {
+          lines.push(`${f.selector || '/* … */'} { ${f.property}: ${f.value}; }`);
+        }
+        lines.push('```');
+      }
+      lines.push('');
+    }
 
     if (l.containerWidths.length > 0) {
       lines.push('### Container Widths');
@@ -563,7 +721,7 @@ export function formatMarkdown(design) {
     if (design.zIndex.issues.length > 0) {
       lines.push('**Issues:**');
       for (const issue of design.zIndex.issues) {
-        lines.push(`- ${issue}`);
+        lines.push(`- ${typeof issue === 'string' ? issue : issue.message}`);
       }
       lines.push('');
     }
@@ -621,6 +779,203 @@ export function formatMarkdown(design) {
       lines.push(`**Aspect ratios:** ${design.images.aspectRatios.slice(0, 8).map(a => `${a.ratio} (${a.count}x)`).join(', ')}`);
       lines.push('');
     }
+  }
+
+  // ── Motion Language (v9) ──
+  if (design.motion && (design.motion.durations?.length || design.motion.keyframes?.length)) {
+    lines.push('## Motion Language');
+    lines.push('');
+    lines.push(`**Feel:** ${design.motion.feel} · **Scroll-linked:** ${design.motion.scrollLinked?.present ? 'yes' : 'no'}`);
+    lines.push('');
+    if (design.motion.durations?.length) {
+      lines.push('### Duration Tokens');
+      lines.push('');
+      lines.push('| name | value | ms |');
+      lines.push('|---|---|---|');
+      for (const d of design.motion.durations) lines.push(`| \`${d.name}\` | \`${d.css}\` | ${d.ms} |`);
+      lines.push('');
+    }
+    if (design.motion.easings?.length) {
+      lines.push('### Easing Families');
+      lines.push('');
+      const byFamily = {};
+      for (const e of design.motion.easings) (byFamily[e.family] ||= []).push(e);
+      for (const [family, list] of Object.entries(byFamily)) {
+        lines.push(`- **${family}** (${list.reduce((s, e) => s + (e.count || 0), 0)} uses) — \`${list.map(e => e.raw).slice(0, 3).join('`, `')}\``);
+      }
+      lines.push('');
+    }
+    if (design.motion.springs?.length) {
+      lines.push('### Spring / Overshoot Easings');
+      lines.push('');
+      for (const s of design.motion.springs) lines.push(`- \`${s.raw}\``);
+      lines.push('');
+    }
+    const usedKf = (design.motion.keyframes || []).filter(k => k.used);
+    if (usedKf.length) {
+      lines.push('### Keyframes In Use');
+      lines.push('');
+      lines.push('| name | kind | properties | uses |');
+      lines.push('|---|---|---|---|');
+      for (const k of usedKf.slice(0, 20)) lines.push(`| \`${k.name}\` | ${k.kind} | ${k.propertiesAnimated.slice(0, 4).join(', ')} | ${k.usageCount} |`);
+      lines.push('');
+    }
+  }
+
+  // ── Component Anatomy (v9) ──
+  if ((design.componentAnatomy || []).length) {
+    lines.push('## Component Anatomy');
+    lines.push('');
+    for (const a of design.componentAnatomy.slice(0, 6)) {
+      lines.push(`### ${a.kind} — ${a.totalInstances} instance${a.totalInstances === 1 ? '' : 's'}`);
+      lines.push('');
+      const slots = Object.entries(a.slots).filter(([, v]) => v).map(([k]) => k);
+      if (slots.length) lines.push(`**Slots:** ${slots.join(', ')}`);
+      if (a.props.variant.length) lines.push(`**Variants:** ${a.props.variant.join(' · ')}`);
+      if (a.props.size.length) lines.push(`**Sizes:** ${a.props.size.join(' · ')}`);
+      lines.push('');
+      if (a.variants.length > 1) {
+        lines.push('| variant | count | sample label |');
+        lines.push('|---|---|---|');
+        for (const v of a.variants.slice(0, 8)) lines.push(`| ${v.name} | ${v.count} | ${(v.sampleText[0] || '').slice(0, 40)} |`);
+        lines.push('');
+      }
+    }
+  }
+
+  // ── Brand Voice (v9) ──
+  if (design.voice && (design.voice.ctaVerbs?.length || design.voice.sampleHeadings?.length)) {
+    lines.push('## Brand Voice');
+    lines.push('');
+    lines.push(`**Tone:** ${design.voice.tone} · **Pronoun:** ${design.voice.pronoun} · **Headings:** ${design.voice.headingStyle} (${design.voice.headingLengthClass})`);
+    lines.push('');
+    if (design.voice.ctaVerbs?.length) {
+      lines.push('### Top CTA Verbs');
+      lines.push('');
+      for (const v of design.voice.ctaVerbs.slice(0, 8)) lines.push(`- **${v.value}** (${v.count})`);
+      lines.push('');
+    }
+    if (design.voice.buttonPatterns?.length) {
+      lines.push('### Button Copy Patterns');
+      lines.push('');
+      for (const p of design.voice.buttonPatterns.slice(0, 10)) lines.push(`- "${p.value}" (${p.count}×)`);
+      lines.push('');
+    }
+    if (design.voice.sampleHeadings?.length) {
+      lines.push('### Sample Headings');
+      lines.push('');
+      for (const h of design.voice.sampleHeadings) lines.push(`> ${h}`);
+      lines.push('');
+    }
+  }
+
+  // ── v10: Page Intent ──
+  if (design.pageIntent && design.pageIntent.type) {
+    lines.push('## Page Intent');
+    lines.push('');
+    lines.push(`**Type:** \`${design.pageIntent.type}\` (confidence ${design.pageIntent.confidence})`);
+    if (design.pageIntent.description) lines.push(`**Description:** ${design.pageIntent.description}`);
+    if (design.pageIntent.alternates?.length) {
+      lines.push('');
+      lines.push('Alternates: ' + design.pageIntent.alternates.map(a => `${a.type} (${a.score})`).join(', '));
+    }
+    lines.push('');
+  }
+
+  // ── v10: Section Roles ──
+  if (design.sectionRoles && design.sectionRoles.sections?.length) {
+    lines.push('## Section Roles');
+    lines.push('');
+    lines.push('Reading order (top→bottom): ' + (design.sectionRoles.readingOrder || []).join(' → '));
+    lines.push('');
+    lines.push('| # | Role | Heading | Confidence |');
+    lines.push('|---|------|---------|------------|');
+    for (const s of design.sectionRoles.sections.slice(0, 20)) {
+      const h = (s.heading || '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|').slice(0, 80);
+      lines.push(`| ${s.index} | ${s.role}${s.subrole ? ` · ${s.subrole}` : ''} | ${h || '—'} | ${s.confidence} |`);
+    }
+    lines.push('');
+  }
+
+  // ── v10: Material Language ──
+  if (design.materialLanguage && design.materialLanguage.label) {
+    lines.push('## Material Language');
+    lines.push('');
+    lines.push(`**Label:** \`${design.materialLanguage.label}\` (confidence ${design.materialLanguage.confidence})`);
+    const m = design.materialLanguage.metrics || {};
+    lines.push('');
+    lines.push('| Metric | Value |');
+    lines.push('|--------|-------|');
+    if (m.saturation != null) lines.push(`| Avg saturation | ${m.saturation} |`);
+    if (m.shadowProfile) lines.push(`| Shadow profile | ${m.shadowProfile} |`);
+    if (m.avgShadowBlur != null) lines.push(`| Avg shadow blur | ${m.avgShadowBlur}px |`);
+    if (m.maxRadius != null) lines.push(`| Max radius | ${m.maxRadius}px |`);
+    if (m.hasBackdropBlur != null) lines.push(`| backdrop-filter in use | ${m.hasBackdropBlur ? 'yes' : 'no'} |`);
+    if (m.gradientCount != null) lines.push(`| Gradients | ${m.gradientCount} |`);
+    lines.push('');
+  }
+
+  // ── v10: Imagery Style ──
+  if (design.imageryStyle && design.imageryStyle.label && design.imageryStyle.label !== 'none') {
+    lines.push('## Imagery Style');
+    lines.push('');
+    lines.push(`**Label:** \`${design.imageryStyle.label}\` (confidence ${design.imageryStyle.confidence})`);
+    const c = design.imageryStyle.counts || {};
+    lines.push(`**Counts:** total ${c.total || 0}, svg ${c.svg || 0}, icon ${c.icon || 0}, screenshot-like ${c.screenshot || 0}, photo-like ${c.photoLike || 0}`);
+    if (design.imageryStyle.dominantAspect) lines.push(`**Dominant aspect:** ${design.imageryStyle.dominantAspect}`);
+    if (design.imageryStyle.radiusProfile) lines.push(`**Radius profile on images:** ${design.imageryStyle.radiusProfile}`);
+    lines.push('');
+  }
+
+  // ── v10: Component Library ──
+  if (design.componentLibrary && design.componentLibrary.library && design.componentLibrary.library !== 'unknown') {
+    lines.push('## Component Library');
+    lines.push('');
+    lines.push(`**Detected:** \`${design.componentLibrary.library}\` (confidence ${design.componentLibrary.confidence})`);
+    if ((design.componentLibrary.evidence || []).length) {
+      lines.push('');
+      lines.push('Evidence:');
+      for (const e of design.componentLibrary.evidence) lines.push(`- ${e}`);
+    }
+    if ((design.componentLibrary.alternates || []).length) {
+      lines.push('');
+      lines.push('Also considered: ' + design.componentLibrary.alternates.map(a => `${a.id} (${a.score})`).join(', '));
+    }
+    lines.push('');
+  }
+
+  // ── v10: Multi-Page Map ──
+  if (design.multiPage && Array.isArray(design.multiPage.pages) && design.multiPage.pages.length) {
+    lines.push('## Multi-Page Map');
+    lines.push('');
+    lines.push('| Page Type | URL | Status |');
+    lines.push('|-----------|-----|--------|');
+    for (const p of design.multiPage.pages) {
+      lines.push(`| ${p.type || '—'} | ${p.url} | ${p.error ? 'error' : 'ok'} |`);
+    }
+    lines.push('');
+    if (design.multiPage.consistency?.shared?.colors?.length) {
+      lines.push(`**Shared colors across pages:** ${design.multiPage.consistency.shared.colors.slice(0, 10).map(c => `\`${c}\``).join(', ')}`);
+      lines.push('');
+    }
+  }
+
+  // ── v10.1: Component Screenshots ──
+  if (design.componentScreenshots && Array.isArray(design.componentScreenshots.components) && design.componentScreenshots.components.length) {
+    lines.push('## Component Screenshots');
+    lines.push('');
+    lines.push(`${design.componentScreenshots.components.length} retina crops written to \`screenshots/\`. Index: \`*-screenshots.json\`.`);
+    lines.push('');
+    lines.push('| Cluster | Variant | Size (px) | File |');
+    lines.push('|---------|---------|-----------|------|');
+    for (const c of design.componentScreenshots.components.slice(0, 20)) {
+      lines.push(`| ${c.cluster} | ${c.variant} | ${c.bounds?.w || '?'} × ${c.bounds?.h || '?'} | \`${c.path}\` |`);
+    }
+    if (design.componentScreenshots.fullPage) {
+      lines.push('');
+      lines.push(`Full-page: \`${design.componentScreenshots.fullPage.path}\``);
+    }
+    lines.push('');
   }
 
   // ── Quick Start ──

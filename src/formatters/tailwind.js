@@ -1,7 +1,7 @@
-import { rgbToHex, rgbToHsl } from '../utils.js';
+import { rgbToHsl } from '../utils.js';
 
 function generateColorScale(hex, parsed) {
-  const { h, s } = rgbToHsl(parsed);
+  const { h, s } = parsed.hsl ?? rgbToHsl(parsed.rgb);
   const scale = {};
   const levels = [
     { name: '50', l: 97 }, { name: '100', l: 94 }, { name: '200', l: 86 },
@@ -75,8 +75,11 @@ export function formatTailwind(design) {
   }
 
   // Shadows
-  for (const s of design.shadows.values) {
-    config.boxShadow[s.label] = s.raw;
+  const shadowLadder = design.shadows.elevation?.length
+    ? design.shadows.elevation.map(e => [e.name, e.raw])
+    : design.shadows.values.map(s => [s.label, s.raw]);
+  for (const [name, raw] of shadowLadder) {
+    config.boxShadow[name] = raw;
   }
 
   // Breakpoints

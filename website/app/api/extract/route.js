@@ -9,23 +9,12 @@
 //   { type:'error', error }                      — terminal failure
 
 import { extractDesignLanguage } from '../../../../src/index.js';
-import { formatMarkdown } from '../../../../src/formatters/markdown.js';
-import { formatTailwind } from '../../../../src/formatters/tailwind.js';
-import { formatCssVars } from '../../../../src/formatters/css-vars.js';
-import { formatPreview } from '../../../../src/formatters/preview.js';
-import { formatFigma } from '../../../../src/formatters/figma.js';
-import { formatReactTheme, formatShadcnTheme } from '../../../../src/formatters/theme.js';
-import { formatWordPress, formatWordPressTheme } from '../../../../src/formatters/wordpress.js';
-import { formatDtcgTokens } from '../../../../src/formatters/dtcg-tokens.js';
-import { formatIosSwiftUI } from '../../../../src/formatters/ios-swiftui.js';
-import { formatAndroidCompose } from '../../../../src/formatters/android-compose.js';
-import { formatFlutterDart } from '../../../../src/formatters/flutter-dart.js';
-import { formatAgentRules } from '../../../../src/formatters/agent-rules.js';
-import { nameFromUrl } from '../../../../src/utils.js';
-
 import { validateTargetUrl } from '../../../../website/lib/url-safety.js';
-import { checkRate } from '../../../../website/lib/rate-limit.js';
+import { checkRate, checkRateBlob } from '../../../../website/lib/rate-limit.js';
 import { cacheKey, getCached, putCached } from '../../../../website/lib/cache.js';
+import { buildFiles, buildSummary } from '../../../../website/lib/build-files.js';
+import { wantsTheatre, frameEvent, THEATRE_SCREENCAST_OPTS } from '../../../../website/lib/theatre.js';
+import { recordReel, loadReel, buildReplayTimeline } from '../../../../website/lib/reel.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,7 +33,8 @@ const STAGES = [
   'score',
 ];
 
-async function getBrowserOptions() {
+// Bundled Chromium via @sparticuz on Vercel/Lambda; bare launch in dev.
+async function getLocalBrowserOptions() {
   if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
     const chromium = (await import('@sparticuz/chromium')).default;
     return {
@@ -53,6 +43,34 @@ async function getBrowserOptions() {
     };
   }
   return {};
+}
+
+async function getBrowserOptions() {
+  // Preferred path: connect to a remote Playwright browser (Browserless v2).
+  // No Chromium binary on the function — cold starts drop from ~3s to ~50ms,
+  // and the heavy work runs on Browserless's infra, not Vercel CPU minutes.
+  if (process.env.BROWSERLESS_TOKEN) {
+    const region = process.env.BROWSERLESS_REGION || 'production-sfo';
+    return {
+      wsEndpoint: `wss://${region}.browserless.io/?token=${process.env.BROWSERLESS_TOKEN}`,
+    };
+  }
+  return getLocalBrowserOptions();
+}
+
+// A Browserless failure (quota exhausted → 401, region down, ws error)
+// should not break extraction — it just means we fall back to the
+// bundled Chromium for that request.
+function isBrowserlessFailure(err) {
+  const m = String(err?.message || err || '').toLowerCase();
+  return (
+    m.includes('browserless') ||
+    m.includes('401') ||
+    m.includes('unauthorized') ||
+    m.includes('usage limit') ||
+    m.includes('connectovercdp') ||
+    m.includes('websocket')
+  );
 }
 
 function ndjson(obj) {
@@ -72,78 +90,6 @@ function* walkDtcgTokens(tree, path = []) {
   }
 }
 
-function buildSummary(design) {
-  return {
-    url: design.meta?.url,
-    title: design.meta?.title,
-    colors: design.colors?.all?.length ?? 0,
-    colorList: (design.colors?.all || []).slice(0, 20).map((c) => c.hex),
-    fonts: design.typography?.families?.map((f) => f.name).join(', ') || 'none detected',
-    spacingCount: design.spacing?.scale?.length ?? 0,
-    spacingBase: design.spacing?.base ?? null,
-    shadowCount: design.shadows?.values?.length ?? 0,
-    radiiCount: design.borders?.radii?.length ?? 0,
-    componentCount: Object.keys(design.components || {}).length,
-    cssVarCount: Object.values(design.variables || {}).reduce((s, v) => s + Object.keys(v).length, 0),
-    a11yScore: design.accessibility?.score ?? null,
-    a11yFailCount: design.accessibility?.failCount ?? 0,
-    score: design.score,
-  };
-}
-
-function buildFiles(design, targetUrl) {
-  const prefix = nameFromUrl(targetUrl);
-  const dtcg = formatDtcgTokens(design);
-  const dtcgJson = JSON.stringify(dtcg, null, 2);
-
-  const files = {
-    [`${prefix}-design-language.md`]: formatMarkdown(design),
-    [`${prefix}-design-tokens.json`]: dtcgJson,
-    [`${prefix}-tailwind.config.js`]: formatTailwind(design),
-    [`${prefix}-variables.css`]: formatCssVars(design),
-    [`${prefix}-preview.html`]: formatPreview(design),
-    [`${prefix}-figma-variables.json`]: formatFigma(design),
-    [`${prefix}-theme.js`]: formatReactTheme(design),
-    [`${prefix}-shadcn-theme.css`]: formatShadcnTheme(design),
-    [`${prefix}-wordpress-theme.json`]: formatWordPress(design),
-  };
-
-  // MCP companion JSON — same subset the CLI writes.
-  files[`${prefix}-mcp.json`] = JSON.stringify({
-    colors: { all: design.colors?.all || [] },
-    regions: design.regions || [],
-    componentClusters: design.componentClusters || [],
-    accessibility: { remediation: design.accessibility?.remediation || [] },
-    cssHealth: design.cssHealth || null,
-  }, null, 2);
-
-  // iOS
-  files['ios/DesignTokens.swift'] = formatIosSwiftUI(dtcg);
-
-  // Android (returns { filename: content })
-  const android = formatAndroidCompose(dtcg);
-  for (const name of Object.keys(android)) {
-    files[`android/${name}`] = android[name];
-  }
-
-  // Flutter
-  files['flutter/design_tokens.dart'] = formatFlutterDart(dtcg);
-
-  // WordPress block theme (5 files)
-  const wpTheme = formatWordPressTheme(dtcg, design);
-  for (const name of Object.keys(wpTheme)) {
-    files[`wordpress-theme/${name}`] = wpTheme[name];
-  }
-
-  // Agent rules
-  const agentFiles = formatAgentRules({ design, tokens: dtcg, url: targetUrl });
-  for (const name of Object.keys(agentFiles)) {
-    files[name] = agentFiles[name];
-  }
-
-  return { files, dtcg };
-}
-
 function extractIp(request) {
   const xff = request.headers.get('x-forwarded-for');
   if (xff) return xff.split(',')[0].trim();
@@ -153,20 +99,41 @@ function extractIp(request) {
 }
 
 // Emit cached payload as a simulated stream so the hero paints consistently.
-async function streamCached(controller, cached, targetUrl) {
+// With `theatre` on and a recorded reel present, replays the real screencast
+// (frames merged with the token paint) so a cache hit still looks live.
+async function streamCached(controller, cached, targetUrl, hash, theatre = false) {
   controller.enqueue(ndjson({ type: 'cache', cached: true }));
+  // Permalink up front — the client can rewrite the URL bar to /x/<hash>
+  // before any heavy paint, so refresh-and-share works during the stream.
+  controller.enqueue(ndjson({ type: 'permalink', hash }));
+
+  // Re-derive DTCG tokens from the cached design so the token-by-token paint
+  // still happens on a cache hit.
+  const { files, dtcg } = buildFiles(cached.design, targetUrl);
+  const tokens = [];
+  for (const { path, value, $type } of walkDtcgTokens(dtcg)) {
+    tokens.push({ category: path.split('.')[1] || 'misc', path, value, $type });
+  }
+  const summary = buildSummary(cached.design);
+
+  if (theatre) {
+    const reel = await loadReel(hash);
+    if (reel) {
+      const { steps } = buildReplayTimeline({ frames: reel.frames, tokens, stages: STAGES, summary, files });
+      for (const { delayMs, event } of steps) {
+        if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+        controller.enqueue(ndjson(event));
+      }
+      return;
+    }
+  }
+
   for (const stage of STAGES) {
     controller.enqueue(ndjson({ type: 'stage', name: stage }));
     await new Promise((r) => setTimeout(r, 40));
   }
-  // Re-derive DTCG tokens from the cached design so the token-by-token paint
-  // still happens on a cache hit.
-  const { files, dtcg } = buildFiles(cached.design, targetUrl);
-  for (const { path, value, $type } of walkDtcgTokens(dtcg)) {
-    const category = path.split('.')[1] || 'misc';
-    controller.enqueue(ndjson({ type: 'token', category, path, value, $type }));
-  }
-  controller.enqueue(ndjson({ type: 'summary', summary: buildSummary(cached.design) }));
+  for (const tok of tokens) controller.enqueue(ndjson({ type: 'token', ...tok }));
+  controller.enqueue(ndjson({ type: 'summary', summary }));
   controller.enqueue(ndjson({ type: 'files', files }));
 }
 
@@ -183,30 +150,100 @@ export async function POST(request) {
   const targetUrl = validation.url;
 
   const ip = extractIp(request);
-  const rate = checkRate(`extract:${ip}`);
-  if (!rate.allowed) {
-    return Response.json(
-      { error: 'Rate limit — 3 extractions per day. Try again later.', resetAt: rate.resetAt },
-      { status: 429 }
-    );
+  const theatre = wantsTheatre(body, request.url);
+  // Autoplay: replay a recorded reel if one exists, but NEVER launch a browser.
+  // Keeps the homepage hero free to loop without burning compute per visitor.
+  const replayOnly = body?.replayOnly === true;
+
+  // Cache hit serves free — no rate-limit accounting, repeats cost nothing.
+  const key = cacheKey(targetUrl);
+  const cached = await getCached(key);
+
+  if (!cached && replayOnly) {
+    const idle = new ReadableStream({
+      start(controller) {
+        controller.enqueue(ndjson({ type: 'idle' }));
+        controller.close();
+      },
+    });
+    return new Response(idle, {
+      headers: { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store' },
+    });
+  }
+
+  if (!cached) {
+    // First-line per-instance memory guard (cheap, blunts hammering within an instance).
+    const memRate = checkRate(`extract:${ip}`, { limit: 2 });
+    if (!memRate.allowed) {
+      return Response.json(
+        {
+          error: 'Free demo: 2 extractions per day. Use the CLI for unlimited: npx designlang ' + new URL(targetUrl).hostname,
+          resetAt: memRate.resetAt,
+          cli: 'npx designlang ' + new URL(targetUrl).hostname,
+        },
+        { status: 429, headers: { 'retry-after': String(Math.ceil((memRate.resetAt - Date.now()) / 1000)) } }
+      );
+    }
+    // Persistent Blob-backed limit (survives cold starts, real cross-instance enforcement).
+    const blobRate = await checkRateBlob(`extract:${ip}`, { limit: 2 });
+    if (!blobRate.allowed) {
+      return Response.json(
+        {
+          error: 'Free demo: 2 extractions per day. Use the CLI for unlimited: npx designlang ' + new URL(targetUrl).hostname,
+          resetAt: blobRate.resetAt,
+          cli: 'npx designlang ' + new URL(targetUrl).hostname,
+        },
+        { status: 429, headers: { 'retry-after': String(Math.ceil((blobRate.resetAt - Date.now()) / 1000)) } }
+      );
+    }
   }
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const key = cacheKey(targetUrl);
-        const cached = await getCached(key);
         if (cached) {
-          await streamCached(controller, cached, targetUrl);
+          await streamCached(controller, cached, targetUrl, key, theatre);
           controller.close();
           return;
         }
 
         // Pre-stage markers — best-effort progress since extraction is atomic.
+        // Emit the permalink hash early so the URL bar can rewrite to /x/<hash>
+        // before the heavy paint begins.
+        controller.enqueue(ndjson({ type: 'permalink', hash: key }));
         controller.enqueue(ndjson({ type: 'stage', name: 'crawl' }));
 
         const browserOpts = await getBrowserOptions();
-        const design = await extractDesignLanguage(targetUrl, browserOpts);
+
+        // Theatre: a frame sink that streams what Chromium paints, live, into
+        // the same NDJSON response. Opt-in only — undefined otherwise, so the
+        // crawler skips the screencast entirely.
+        const reelFrames = [];
+        const onScreencastFrame = theatre
+          ? (frame) => {
+              reelFrames.push(frame); // captured once, replayed on cache hits
+              try { controller.enqueue(ndjson(frameEvent(frame))); } catch { /* stream closed */ }
+            }
+          : undefined;
+        const theatreOpts = theatre
+          ? { onScreencastFrame, screencastOpts: THEATRE_SCREENCAST_OPTS }
+          : {};
+
+        let design;
+        try {
+          design = await extractDesignLanguage(targetUrl, { ...browserOpts, ...theatreOpts });
+        } catch (err) {
+          // Browserless quota / auth / connection failure — retry once on
+          // the bundled Chromium so a dead remote browser never takes the
+          // whole extractor down.
+          if (browserOpts.wsEndpoint && isBrowserlessFailure(err)) {
+            console.warn('[extract] browserless failed, falling back to bundled chromium', err?.message);
+            const fallback = await getLocalBrowserOptions();
+            design = await extractDesignLanguage(targetUrl, { ...fallback, ...theatreOpts });
+          } else {
+            throw err;
+          }
+        }
 
         // Post-stage markers once extraction resolves.
         for (const stage of STAGES.slice(1)) {
@@ -224,8 +261,16 @@ export async function POST(request) {
         controller.enqueue(ndjson({ type: 'summary', summary: buildSummary(design) }));
         controller.enqueue(ndjson({ type: 'files', files }));
 
-        // Fire-and-forget cache write.
-        putCached(key, { design }).catch(() => {});
+        // Persist BEFORE the stream closes. On serverless the instance is
+        // frozen once the response ends, so a fire-and-forget write gets
+        // killed mid-flight — leaving /x/<hash> and /api/pdf/<hash> with no
+        // cached design to render (the source of "downloaded PDF won't open").
+        await putCached(key, { design });
+
+        // Record the screencast reel so cache hits can replay this exact run.
+        if (theatre && reelFrames.length) {
+          await recordReel(key, reelFrames);
+        }
       } catch (err) {
         console.error('[extract] failed', { url: targetUrl, ip, message: err?.message });
         controller.enqueue(ndjson({ type: 'error', error: err?.message || 'Extraction failed' }));

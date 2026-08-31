@@ -5,8 +5,29 @@ import { formatTokens } from './formatters/tokens.js';
 import { formatTailwind } from './formatters/tailwind.js';
 import { formatCssVars } from './formatters/css-vars.js';
 import { saveSnapshot, getHistory } from './history.js';
-import { writeFileSync, readFileSync, existsSync } from 'fs';
+import { openSync, closeSync, ftruncateSync, writeSync } from 'fs';
 import { join } from 'path';
+
+// Race-free "update only if file exists" — open with 'r+' atomically
+// requires an existing file (throws ENOENT otherwise) and gives us a
+// write-capable descriptor in one syscall, eliminating the toctou window
+// that statSync→writeFileSync would have. Truncate then write through the
+// same fd so no other process can sneak between check and write.
+function updateIfExists(path, content) {
+  let fd;
+  try {
+    fd = openSync(path, 'r+');
+    ftruncateSync(fd, 0);
+    writeSync(fd, content, 0, 'utf-8');
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* best-effort close */ }
+    }
+  }
+}
 
 export async function syncDesign(url, options = {}) {
   const { out = '.', interval = 3600000 } = options; // default 1 hour
@@ -42,23 +63,9 @@ export async function syncDesign(url, options = {}) {
   // Update local files
   const updates = [];
 
-  const tokensPath = join(out, 'design-tokens.json');
-  if (existsSync(tokensPath)) {
-    writeFileSync(tokensPath, formatTokens(current), 'utf-8');
-    updates.push('design-tokens.json');
-  }
-
-  const tailwindPath = join(out, 'tailwind.config.js');
-  if (existsSync(tailwindPath)) {
-    writeFileSync(tailwindPath, formatTailwind(current), 'utf-8');
-    updates.push('tailwind.config.js');
-  }
-
-  const cssPath = join(out, 'variables.css');
-  if (existsSync(cssPath)) {
-    writeFileSync(cssPath, formatCssVars(current), 'utf-8');
-    updates.push('variables.css');
-  }
+  if (updateIfExists(join(out, 'design-tokens.json'), formatTokens(current)))    updates.push('design-tokens.json');
+  if (updateIfExists(join(out, 'tailwind.config.js'), formatTailwind(current)))  updates.push('tailwind.config.js');
+  if (updateIfExists(join(out, 'variables.css'),     formatCssVars(current)))    updates.push('variables.css');
 
   return {
     changes,

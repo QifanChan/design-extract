@@ -1,7 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { readFileSync, openSync, closeSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, join } from 'node:path';
 import { parsePlatforms, mergeConfig } from '../src/config.js';
 
 const CLI_PATH = resolve(import.meta.dirname, '..', 'bin', 'design-extract.js');
@@ -18,9 +20,10 @@ describe('CLI', () => {
     assert.ok(output.trim().match(/^\d+\.\d+\.\d+$/));
   });
 
-  it('shows version number 6.0.0', () => {
+  it('shows the version from package.json', async () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8'));
     const output = execFileSync('node', [CLI_PATH, '--version'], { encoding: 'utf-8' });
-    assert.equal(output.trim(), '6.0.0');
+    assert.equal(output.trim(), pkg.version);
   });
 
   it('exits with error when no arguments provided', () => {
@@ -36,6 +39,43 @@ describe('CLI', () => {
   it('lists --platforms option in help output', () => {
     const output = execFileSync('node', [CLI_PATH, '--help'], { encoding: 'utf-8' });
     assert.ok(output.includes('--platforms'));
+  });
+
+  it('registers the fidelity command with a required --clone option', () => {
+    const output = execFileSync('node', [CLI_PATH, 'fidelity', '--help'], { encoding: 'utf-8' });
+    assert.ok(output.includes('Measure how faithfully a clone reproduces'));
+    assert.ok(output.includes('--clone'));
+    assert.ok(output.includes('--min'));
+  });
+
+  it('fidelity exits non-zero when --clone is missing', () => {
+    try {
+      execFileSync('node', [CLI_PATH, 'fidelity', 'https://example.com'], { encoding: 'utf-8', stdio: 'pipe' });
+      assert.fail('Should have thrown');
+    } catch (err) {
+      assert.ok(err.status !== 0);
+    }
+  });
+
+  it('registers the gallery command', () => {
+    const output = execFileSync('node', [CLI_PATH, 'gallery', '--help'], { encoding: 'utf-8' });
+    assert.ok(output.includes('Build a static, shareable gallery'));
+    assert.ok(output.includes('--base-url'));
+  });
+
+  it('clone exposes a --fidelity flag', () => {
+    const output = execFileSync('node', [CLI_PATH, 'clone', '--help'], { encoding: 'utf-8' });
+    assert.ok(output.includes('--fidelity'));
+    assert.ok(output.includes('FIDELITY.md') || output.includes('token-fidelity'));
+  });
+
+  it('gallery exits non-zero when no reports are found', () => {
+    try {
+      execFileSync('node', [CLI_PATH, 'gallery', resolve(import.meta.dirname, '..', 'src')], { encoding: 'utf-8', stdio: 'pipe' });
+      assert.fail('Should have thrown');
+    } catch (err) {
+      assert.ok(err.status !== 0);
+    }
   });
 });
 
@@ -80,5 +120,59 @@ describe('mergeConfig platforms', () => {
   it('defaults to [web] when neither CLI nor config provides platforms', () => {
     const merged = mergeConfig({}, {});
     assert.deepEqual(merged.platforms, ['web']);
+  });
+});
+
+describe('doctor command', () => {
+  const runDoctor = (args = []) => {
+    try {
+      return { status: 0, output: execFileSync('node', [CLI_PATH, 'doctor', ...args], { encoding: 'utf-8', stdio: 'pipe' }) };
+    } catch (err) {
+      return { status: err.status, output: (err.stdout || '') + (err.stderr || '') };
+    }
+  };
+
+  it('registers the doctor command in help output', () => {
+    // Redirect to a file rather than a pipe: commander exits before a piped
+    // stdout flushes, which truncates the tail of the command list.
+    const tmp = join(tmpdir(), `designlang-help-${process.pid}.txt`);
+    const fd = openSync(tmp, 'w');
+    try {
+      execFileSync('node', [CLI_PATH, '--help'], { stdio: ['ignore', fd, 'ignore'] });
+    } finally {
+      closeSync(fd);
+    }
+    const output = readFileSync(tmp, 'utf-8');
+    rmSync(tmp, { force: true });
+    assert.ok(output.includes('doctor'));
+  });
+
+  it('describes itself under doctor --help', () => {
+    const output = execFileSync('node', [CLI_PATH, 'doctor', '--help'], { encoding: 'utf-8' });
+    assert.ok(output.includes('health check'));
+  });
+
+  it('prints a row for every environment check', () => {
+    const { output } = runDoctor();
+    for (const label of ['Node', 'designlang', 'playwright', 'Chromium binary', 'Output dir', 'Network']) {
+      assert.ok(output.includes(label), `missing check row: ${label}`);
+    }
+  });
+
+  it('reports the running designlang version', () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8'));
+    const { output } = runDoctor();
+    assert.ok(output.includes(pkg.version));
+  });
+
+  it('exits 0 if and only if every check passed', () => {
+    const { status, output } = runDoctor();
+    assert.equal(status === 0, output.includes('All checks passed'));
+  });
+
+  it('prints a fix hint for each failing check', () => {
+    const { output } = runDoctor();
+    const failed = output.split('\n').filter(l => /\bFAIL\b/.test(l));
+    if (failed.length) assert.ok(output.includes('fix:'), 'a failing check must print a fix hint');
   });
 });

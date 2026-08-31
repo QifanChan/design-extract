@@ -1,6 +1,6 @@
 // Historical tracking — save and compare design snapshots over time
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -19,10 +19,9 @@ export function saveSnapshot(design) {
   const hostname = new URL(design.meta.url).hostname.replace(/^www\./, '');
   const file = historyFile(hostname);
 
+  // Read directly inside try/catch — no existsSync race.
   let history = [];
-  if (existsSync(file)) {
-    try { history = JSON.parse(readFileSync(file, 'utf-8')); } catch { history = []; }
-  }
+  try { history = JSON.parse(readFileSync(file, 'utf-8')); } catch { history = []; }
 
   // Compact snapshot — only store key metrics, not full data
   const snapshot = {
@@ -65,7 +64,6 @@ export function getHistory(url) {
   ensureDir();
   const hostname = new URL(url).hostname.replace(/^www\./, '');
   const file = historyFile(hostname);
-  if (!existsSync(file)) return [];
   try { return JSON.parse(readFileSync(file, 'utf-8')); } catch { return []; }
 }
 

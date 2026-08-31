@@ -1,352 +1,482 @@
-import Rule from './components/Rule';
-import Marginalia from './components/Marginalia';
-import HeroExtractor from './components/HeroExtractor';
-import TokenBrowser from './components/TokenBrowser';
-import McpSection from './components/McpSection';
-import PlatformTabs from './components/PlatformTabs';
-import CssHealth from './components/CssHealth';
-import A11ySlider from './components/A11ySlider';
-import RegionsComponents from './components/RegionsComponents';
-import Specimens from './components/Specimens';
-import Comparison from './components/Comparison';
+import Theatre from './components/theatre/Theatre';
+import Grainient from './components/Grainient';
+import RedditMarquee from './components/RedditMarquee';
+import CopyCmd from './components/CopyCmd';
+import { FAQ } from './seo-config';
+
+const FEATURES = [
+  { tag: 'tokens', title: 'W3C DTCG tokens', body: 'Primitive, semantic and composite tokens — straight to Tailwind, CSS vars, Figma variables, shadcn theme.' },
+  { tag: 'multi-platform', title: 'iOS, Android, Flutter, Web', body: 'One run, eight platforms. SwiftUI, Compose, Dart, React, Vue, Svelte, WordPress block theme.' },
+  { tag: 'mcp', title: 'Stdio MCP server', body: 'Plug into Claude Code, Cursor or Windsurf. Your editor speaks design tokens natively.' },
+  { tag: 'a11y', title: 'WCAG remediation', body: 'Real contrast audit, with the smallest hue-shift that passes AA. Not just a red badge.' },
+  { tag: 'voice', title: 'Voice + anatomy', body: 'Real headlines, real CTAs, real component slots — extracted, named, and typed.' },
+  { tag: 'pdf', title: 'Brand books, native PDF', body: 'Print-ready brand guidelines with chapter breaks, running footers and DTCG attached.' },
+  { tag: 'css health', title: 'CSS health audit', body: 'Specificity, dead rules, duplicate declarations. Fix what AI agents will trip over.' },
+  { tag: 'dark mode', title: 'Dark-mode pairing', body: 'Walks both themes, diffs them, and emits a dual token set. No guessing.' },
+  { tag: 'ci', title: 'Drift CI bot', body: 'Snapshots design tokens. Fails the build when the system silently drifts.' },
+];
+
+// Real comments from r/ClaudeAI launch thread.
+// https://www.reddit.com/r/ClaudeAI/comments/1sm23sp/
+const REDDIT = [
+  { sub: 'r/ClaudeAI', user: 'u/PewPewDiie', body: 'Is the background representative of the token burn and the ungodly amount of work this task seems like for the model?', up: 39, href: 'https://www.reddit.com/r/ClaudeAI/comments/1sm23sp/' },
+  { sub: 'r/ClaudeAI', user: 'u/crypt0amat00r', body: 'Just turned this into an openclaw skill and tested it out. Works great! This is going to be super useful.', up: 17, href: 'https://www.reddit.com/r/ClaudeAI/comments/1sm23sp/' },
+  { sub: 'r/ClaudeAI', user: 'u/BeginningReflection4', body: 'yeah I want that background as much as I want the tool lol', up: 16, href: 'https://www.reddit.com/r/ClaudeAI/comments/1sm23sp/' },
+  { sub: 'r/ClaudeAI', user: 'u/Fidel___Castro', body: 'this is diabolical and will make so many companies unhappy, but I love it', up: 5, href: 'https://www.reddit.com/r/ClaudeAI/comments/1sm23sp/' },
+  { sub: 'r/ClaudeAI', user: 'u/llufnam', body: 'This my friend is bloody awesome! Starred.', up: 4, href: 'https://www.reddit.com/r/ClaudeAI/comments/1sm23sp/' },
+  { sub: 'r/ClaudeAI', user: 'u/crypt0amat00r', body: 'Yes! I have a dedicated "scraper" agent and this is the perfect addition to its skillset. Thank you!', up: 4, href: 'https://www.reddit.com/r/ClaudeAI/comments/1sm23sp/' },
+];
+
+// Real extractions from npx designlang <host>. Pre-rendered into
+// /public/gallery/<slug>/ so each card opens the actual brand book.
+const GALLERY = [
+  { host: 'stripe.com',  slug: 'stripe-com',  primary: '#533afd', accent: '#e5edf5', bg: '#ffffff', grade: 'B'  },
+  { host: 'linear.app',  slug: 'linear-app',  primary: '#5e6ad2', accent: '#e4f222', bg: '#08090a', grade: 'A'  },
+  { host: 'vercel.com',  slug: 'vercel-com',  primary: '#0068d6', accent: '#52aeff', bg: '#fafafa', grade: 'A'  },
+  { host: 'notion.so',   slug: 'notion-so',   primary: '#455dd3', accent: '#0075de', bg: '#ffffff', grade: 'A-' },
+  { host: 'figma.com',   slug: 'figma-com',   primary: '#00b6ff', accent: '#e4ff97', bg: '#ffffff', grade: 'A'  },
+  { host: 'apple.com',   slug: 'apple-com',   primary: '#0071e3', accent: '#f5f5f7', bg: '#ffffff', grade: 'A+' },
+  { host: 'arc.net',     slug: 'arc-net',     primary: '#2702c2', accent: '#fffadd', bg: '#fffcec', grade: 'A'  },
+  { host: 'spotify.com', slug: 'spotify-com', primary: '#1ed760', accent: '#346e4a', bg: '#121212', grade: 'A-' },
+];
+
+function Hero() {
+  return (
+    <section className="hero">
+      <div className="hero-bg" aria-hidden>
+        <Grainient
+          color1="#ff5757"
+          color2="#000000"
+          color3="#7f1d1d"
+          timeSpeed={0.18}
+          colorBalance={0.05}
+          warpStrength={1.0}
+          warpFrequency={4.5}
+          warpSpeed={1.6}
+          warpAmplitude={50.0}
+          blendAngle={0.0}
+          blendSoftness={0.06}
+          rotationAmount={500.0}
+          noiseScale={2.0}
+          grainAmount={0.12}
+          grainScale={2.0}
+          grainAnimated={true}
+          contrast={1.55}
+          gamma={1.0}
+          saturation={1.0}
+          centerX={0.0}
+          centerY={0.0}
+          zoom={0.85}
+        />
+      </div>
+      <div className="wrap">
+        <div className="hero-grid">
+          <div>
+            <h1 className="h1">
+              Reverse-engineer<br />
+              any website&rsquo;s<br />
+              design system.
+            </h1>
+            <p className="lede" style={{ marginTop: 24 }}>
+              One command. DTCG tokens, Tailwind, CSS vars, Figma variables, iOS, Android, Flutter,
+              WordPress, plus a stdio MCP for Claude Code and Cursor — back in seconds.
+            </p>
+            <div className="hero-cta">
+              <a href="#extract" className="btn btn-primary">Watch it read a site</a>
+              <a href="https://github.com/Manavarya09/design-extract" className="btn btn-ghost" target="_blank" rel="noreferrer">View source</a>
+            </div>
+            <div style={{ marginTop: 26 }}>
+              <CopyCmd cmd="npx designlang stripe.com" hint="— no install, no account" />
+            </div>
+          </div>
+
+          <div className="tui">
+            <pre className="tui-out">
+{'$ npx designlang stripe.com --pdf\n\n'}
+{'  walking dom\n'}
+{'  resolving palette\n'}
+{'  reading type\n'}
+{'  measuring rhythm\n'}
+{'  clustering components\n'}
+{'  auditing contrast\n'}
+{'  rendering pdf\n\n'}
+{'Brand book · 42 tokens · 3 fonts · grade A+\n\n'}
+{'  stripe-com.brand.html\n'}
+{'  stripe-com.brand.pdf\n'}
+{'  stripe-com.tokens.json\n'}
+{'  stripe-com.tailwind.config.js'}
+            </pre>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ExtractSection() {
+  return (
+    <section id="extract" className="section dx-section">
+      <div className="dx-section-bg" aria-hidden />
+      <div className="wrap dx-section-wrap">
+        <header className="dx-section-head">
+          <p className="eyebrow" style={{ marginBottom: 14 }}>try it now</p>
+          <h2 className="dx-section-title">Watch it read a site.</h2>
+          <p className="dx-section-tag">Paste a URL. The real browser opens and reads the design system, live.</p>
+        </header>
+        <div className="dx-stage">
+          <Theatre autoStart="stripe.com" redirectOnSubmit />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FeaturesSection() {
+  return (
+    <section className="section bento-section">
+      <div className="wrap">
+        <header className="bento-head">
+          <p className="eyebrow">what&rsquo;s inside</p>
+          <h2 className="h2">Everything you would build by hand.</h2>
+          <p className="lede">
+            Nine extractors, eleven emitters, one design system — for the open web, every native runtime, and your AI editor.
+          </p>
+          <div className="bento-stats mono">
+            <span><strong>26</strong> capabilities</span>
+            <span className="bento-sep">/</span>
+            <span><strong>11</strong> output formats</span>
+            <span className="bento-sep">/</span>
+            <span><strong>3</strong> MCP-aware editors</span>
+            <span className="bento-sep">/</span>
+            <span><strong>$0</strong> · MIT</span>
+          </div>
+        </header>
+
+        <div className="bento">
+          {/* Row 1: hero card (DTCG, full width) */}
+          <article className="bento-card bento-hero">
+            <div className="bento-card-text">
+              <span className="feature-tag">tokens</span>
+              <h3>W3C DTCG tokens, fully linked.</h3>
+              <p>
+                Primitive · semantic · composite. Drop-in for Tailwind, CSS vars, Figma variables,
+                shadcn theme, and React / Vue / Svelte. Reads from the live DOM — the names match
+                what your designers actually shipped.
+              </p>
+            </div>
+            <div className="bento-card-viz" aria-hidden>
+              <div className="dtcg-tree">
+                <div className="dtcg-row"><span className="dtcg-key">primitive.color.brand.500</span><span className="dtcg-swatch" style={{ background: '#dc2626' }} /><span className="dtcg-val">#dc2626</span></div>
+                <div className="dtcg-row dtcg-indent"><span className="dtcg-key">↳ semantic.color.action.primary</span><span className="dtcg-swatch" style={{ background: '#dc2626' }} /><span className="dtcg-val">{'{primitive.color.brand.500}'}</span></div>
+                <div className="dtcg-row dtcg-indent2"><span className="dtcg-key">↳ button.solid.background</span><span className="dtcg-swatch" style={{ background: '#dc2626' }} /><span className="dtcg-val">{'{semantic.color.action.primary}'}</span></div>
+                <div className="dtcg-row" style={{ marginTop: 10 }}><span className="dtcg-key">primitive.spacing.4</span><span className="dtcg-bar" style={{ width: 16 }} /><span className="dtcg-val">16px</span></div>
+                <div className="dtcg-row dtcg-indent"><span className="dtcg-key">↳ semantic.spacing.gutter</span><span className="dtcg-bar" style={{ width: 16 }} /><span className="dtcg-val">{'{primitive.spacing.4}'}</span></div>
+              </div>
+            </div>
+          </article>
+
+          {/* Row 2: two big cards */}
+          <article className="bento-card bento-2">
+            <div className="bento-card-text">
+              <span className="feature-tag">multi-platform</span>
+              <h3>One run, eleven outputs.</h3>
+              <p>iOS SwiftUI, Android Compose, Flutter Dart, WordPress block theme, plus every web format. No second tool.</p>
+            </div>
+            <div className="bento-card-viz bento-platforms" aria-hidden>
+              {[
+                ['Tail',     '#06b6d4'],
+                ['CSS',      '#264de4'],
+                ['shadcn',   '#0f172a'],
+                ['Figma',    '#a259ff'],
+                ['React',    '#61dafb'],
+                ['Vue',      '#42b883'],
+                ['Svelte',   '#ff3e00'],
+                ['iOS',      '#0071e3'],
+                ['Android',  '#3ddc84'],
+                ['Flutter',  '#02569b'],
+                ['WP',       '#21759b'],
+                ['PDF',      '#dc2626'],
+              ].map(([label, color]) => (
+                <span key={label} className="platform-chip" style={{ background: color }}>{label}</span>
+              ))}
+            </div>
+          </article>
+
+          <article className="bento-card bento-2">
+            <div className="bento-card-text">
+              <span className="feature-tag">mcp</span>
+              <h3>Lives inside your editor.</h3>
+              <p>Stdio MCP for Claude Code, Cursor, Windsurf. Plus auto-generated AGENTS.md / .cursorrules / Claude skills.</p>
+            </div>
+            <div className="bento-card-viz" aria-hidden>
+              <pre className="mcp-snippet">
+                <span className="tok-com">{'# .claude/mcp.json'}</span>{'\n'}
+                <span className="tok-pun">{'{'}</span>{'\n'}
+                {'  '}<span className="tok-key">{'"designlang"'}</span>: <span className="tok-pun">{'{'}</span>{'\n'}
+                {'    '}<span className="tok-key">{'"command"'}</span>: <span className="tok-str">{'"npx"'}</span>,{'\n'}
+                {'    '}<span className="tok-key">{'"args"'}</span>: <span className="tok-str">{'["designlang","mcp"]'}</span>{'\n'}
+                {'  '}<span className="tok-pun">{'}'}</span>{'\n'}
+                <span className="tok-pun">{'}'}</span>
+              </pre>
+            </div>
+          </article>
+
+          {/* Row 3: three small cards */}
+          <article className="bento-card bento-3">
+            <span className="feature-tag">a11y</span>
+            <h3>WCAG remediation.</h3>
+            <p>The smallest hue-shift that passes AA. Not just a red badge.</p>
+            <div className="bento-card-viz" aria-hidden>
+              <div className="a11y-pair">
+                <div className="a11y-tile a11y-fail" style={{ background: '#7f1d1d', color: '#a06868' }}>
+                  <span className="a11y-aa">Aa</span>
+                  <span className="a11y-ratio">2.1 · fail</span>
+                </div>
+                <span className="a11y-arrow">→</span>
+                <div className="a11y-tile a11y-pass" style={{ background: '#7f1d1d', color: '#ffffff' }}>
+                  <span className="a11y-aa">Aa</span>
+                  <span className="a11y-ratio">7.4 · AA</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article className="bento-card bento-3">
+            <span className="feature-tag">voice</span>
+            <h3>Real CTAs, real headlines.</h3>
+            <p>The brand voice extracted from the page itself — not Lorem ipsum.</p>
+            <div className="bento-card-viz" aria-hidden>
+              <blockquote className="voice-quote">
+                &ldquo;Make payments your competitive advantage.&rdquo;
+                <span className="voice-meta">— headline · stripe.com</span>
+              </blockquote>
+            </div>
+          </article>
+
+          <article className="bento-card bento-3">
+            <span className="feature-tag">pdf</span>
+            <h3>Brand books, native PDF.</h3>
+            <p>13 chapters, page bookmarks, running footer, tokens attached.</p>
+            <div className="bento-card-viz" aria-hidden>
+              <div className="pdf-cover">
+                <div className="pdf-cover-band" />
+                <div className="pdf-cover-title">Stripe</div>
+                <div className="pdf-cover-meta mono">v1.0 · 13 chapters</div>
+              </div>
+            </div>
+          </article>
+
+          {/* Row 4: three small cards */}
+          <article className="bento-card bento-3">
+            <span className="feature-tag">css health</span>
+            <h3>CSS health audit.</h3>
+            <p>Specificity, dead rules, duplicates. Fix what AI agents trip over.</p>
+            <div className="bento-card-viz" aria-hidden>
+              <div className="health-bars">
+                <div className="health-row"><span className="health-label mono">specificity</span><span className="health-bar"><span style={{ width: '78%', background: '#fde68a' }} /></span><span className="health-num mono">B+</span></div>
+                <div className="health-row"><span className="health-label mono">dead rules</span><span className="health-bar"><span style={{ width: '92%', background: '#86efac' }} /></span><span className="health-num mono">A</span></div>
+                <div className="health-row"><span className="health-label mono">duplicates</span><span className="health-bar"><span style={{ width: '64%', background: '#fdba74' }} /></span><span className="health-num mono">B−</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article className="bento-card bento-3">
+            <span className="feature-tag">dark mode</span>
+            <h3>Dual extraction.</h3>
+            <p>Walks both themes, diffs them, emits one set of paired tokens.</p>
+            <div className="bento-card-viz" aria-hidden>
+              <div className="dual-themes">
+                <div className="theme-tile theme-light">
+                  <span className="mono">light</span>
+                  <span className="theme-swatches"><i style={{ background: '#fafafa' }} /><i style={{ background: '#171717' }} /><i style={{ background: '#dc2626' }} /></span>
+                </div>
+                <div className="theme-tile theme-dark">
+                  <span className="mono">dark</span>
+                  <span className="theme-swatches"><i style={{ background: '#0a0a0a' }} /><i style={{ background: '#fafafa' }} /><i style={{ background: '#ff5757' }} /></span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article className="bento-card bento-3">
+            <span className="feature-tag">ci</span>
+            <h3>Drift CI bot.</h3>
+            <p>Snapshot your tokens. Fail the build when the live system silently moves.</p>
+            <div className="bento-card-viz" aria-hidden>
+              <div className="ci-log mono">
+                <div><span className="ci-pass">✓</span> 47 tokens · in sync</div>
+                <div><span className="ci-warn">!</span> 1 hue shift · accent</div>
+                <div><span className="ci-pass">✓</span> all checks passing</div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div style={{ marginTop: 32, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <a href="/features" className="btn btn-primary">See all 26 capabilities</a>
+          <a href="/blog/mcp-launch" className="btn btn-ghost">Wire it into your editor</a>
+          <span className="mono faint" style={{ fontSize: 12, marginLeft: 'auto' }}>nothing above is paywalled</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RedditSection() {
+  return (
+    <section className="section rdt-section">
+      <div className="wrap" style={{ textAlign: 'center', marginBottom: 36 }}>
+        <p className="eyebrow">loved by developers</p>
+        <h2 className="h2" style={{ fontSize: 'clamp(36px, 5vw, 56px)' }}>From the threads.</h2>
+        <p className="lede" style={{ margin: '0 auto' }}>
+          Real, unedited comments from the r/ClaudeAI launch.
+        </p>
+      </div>
+      <RedditMarquee />
+    </section>
+  );
+}
+
+function GallerySection() {
+  return (
+    <section className="section">
+      <div className="wrap">
+        <p className="eyebrow">see them in action</p>
+        <h2 className="h2">Real extractions, on this site.</h2>
+        <p className="lede" style={{ marginBottom: 36 }}>
+          Eight brands. Eight real <code className="kbd">npx designlang &lt;host&gt;</code> runs. Click any card to open the actual brand book.
+        </p>
+        <div className="gallery-grid">
+          {GALLERY.map(g => (
+            <a
+              key={g.host}
+              href={`/gallery/${g.slug}`}
+              className="gal-card gal-real"
+            >
+              <div
+                className="gal-swatch"
+                style={{ background: `linear-gradient(135deg, ${g.primary} 0%, ${g.accent} 65%, ${g.bg === '#ffffff' ? '#1a1a1a' : g.bg} 100%)` }}
+              />
+              <div className="gal-logo">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://icon.horse/icon/${g.host}`}
+                  alt=""
+                  loading="lazy"
+                  width={64}
+                  height={64}
+                />
+              </div>
+              <div className="gal-meta">
+                <span className="gal-host">{g.host}</span>
+                <span className="gal-grade">brand book ↗</span>
+              </div>
+            </a>
+          ))}
+        </div>
+        <div style={{ marginTop: 28, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <a href="/gallery" className="btn btn-ghost">Browse gallery</a>
+          <span className="mono faint" style={{ alignSelf: 'center', fontSize: 12 }}>
+            extracted live · {new Date().toISOString().slice(0, 10)}
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FaqSection() {
+  return (
+    <section id="faq" className="section">
+      <div className="wrap-narrow">
+        <p className="eyebrow">faq</p>
+        <h2 className="h2">Frequently asked.</h2>
+        <p className="lede" style={{ marginBottom: 36 }}>
+          Quick answers about installing designlang, the output formats, the MCP server, and how it compares to Style Dictionary, Subframe, v0 and design-extractor.com.
+        </p>
+        <div className="faq-list">
+          {FAQ.map((item, i) => (
+            <details key={i} className="faq-item" open={i === 0}>
+              <summary className="faq-q">{item.q}</summary>
+              <div className="faq-a">{item.a}</div>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SeoCopySection() {
+  return (
+    <section id="about" className="section seo-copy-section">
+      <div className="wrap-narrow seo-copy">
+        <p className="eyebrow">about designlang</p>
+        <h2 className="h2">An open-source CLI that turns any URL into a complete design system.</h2>
+        <div className="seo-prose">
+          <p>
+            <strong>designlang</strong> is a free, MIT-licensed command-line tool that points a headless Chromium browser at any
+            live website and reads its design system off the rendered DOM. One run emits W3C{' '}
+            <strong>DTCG tokens</strong> in primitive, semantic and composite layers, plus a Tailwind config, CSS variables,
+            Figma Variables JSON, a shadcn/ui theme, React / Vue / Svelte theme objects, iOS SwiftUI extensions,
+            Android Jetpack Compose <code>Theme.kt</code>, Flutter <code>ThemeData</code>, a WordPress block theme, and a
+            print-ready brand-book PDF with chapter bookmarks and the tokens embedded as a file attachment.
+          </p>
+          <p>
+            designlang is built for the AI-coding era. The bundled <strong>stdio MCP server</strong> exposes every extracted
+            artefact — colours, typography, spacing, motion, anatomy, accessibility findings — to Claude Code, Cursor and
+            Windsurf as native MCP resources. The CLI also writes <code>AGENTS.md</code>, <code>.cursorrules</code> and
+            Claude Code skills directly into your repo so any agent can read the system without prompting.
+          </p>
+          <p>
+            Beyond extraction, designlang ships a <strong>CSS health audit</strong> (specificity graph, dead-rule detection,
+            duplicate declaration count, <code>@keyframes</code> catalogue), a <strong>WCAG remediation</strong> step that
+            picks the smallest hue-shift to pass AA, a <strong>semantic region classifier</strong> for navs / hero / pricing
+            / testimonials / footer, <strong>component clustering</strong> with variant and slot detection, dark-mode pairing,
+            authenticated crawling, and a <strong>CI drift bot</strong> that fails the build when the system silently changes.
+          </p>
+          <p>
+            Designed as a strict superset of <a href="/vs/design-extractor">design-extractor.com</a>, designlang ships the
+            entire DESIGN.md spec (see <a href="/spec">the spec page</a>) plus everything you actually need to build the design.
+            Free, open source, no signup, no API key. Try it on <a href="#extract">any URL above</a> or run{' '}
+            <code className="kbd" style={{ fontSize: 12 }}>npx designlang stripe.com</code> in your terminal.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CtaSection() {
+  return (
+    <section className="section">
+      <div className="wrap" style={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="card" style={{ maxWidth: 720, width: '100%', padding: '36px 32px', textAlign: 'center' }}>
+          <h2 className="h2" style={{ fontSize: 32 }}>Two seconds to first token.</h2>
+          <p className="lede" style={{ margin: '0 auto 24px' }}>
+            Drop the command, get the system. Pipe it into Tailwind, your MCP-aware editor, or a PDF.
+          </p>
+          <div className="row" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+            <code className="kbd" style={{ fontSize: 13, padding: '8px 14px' }}>npx designlang stripe.com</code>
+            <a href="#extract" className="btn btn-primary">Try it now</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function Home() {
   return (
-    <main className="page">
-      {/* ── HEAD SLUG ─────────────────────────────────────── */}
-      <header style={{ paddingTop: 'var(--r4)', paddingBottom: 'var(--r5)' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            gap: 'var(--r5)',
-            borderBottom: 'var(--hair)',
-            paddingBottom: 'var(--r3)',
-          }}
-        >
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/mark.svg" alt="" width={22} height={22} style={{ display: 'block' }} />
-            <span className="mono" style={{ fontSize: 13, letterSpacing: '0.02em' }}>
-              designlang
-              <span style={{ color: 'var(--ink-3)', marginLeft: 12 }}>v7.0</span>
-            </span>
-          </span>
-          <nav
-            className="mono"
-            style={{ display: 'flex', gap: 'var(--r5)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.1em' }}
-          >
-            <a href="#extract" style={{ borderBottom: 0 }}>Extract</a>
-            <a href="#features" style={{ borderBottom: 0 }}>Features</a>
-            <a href="#specimens" style={{ borderBottom: 0 }}>Specimens</a>
-            <a href="#install" style={{ borderBottom: 0 }}>Install</a>
-            <a href="https://github.com/Manavarya09/design-extract" style={{ borderBottom: 0 }}>GitHub</a>
-            <a href="https://www.npmjs.com/package/designlang" style={{ borderBottom: 0 }}>npm</a>
-          </nav>
-        </div>
-      </header>
-
-      {/* ── §00 HERO ──────────────────────────────────────── */}
-      <section id="extract" style={{ paddingBlock: 'var(--r7) var(--r8)', borderTop: 0 }}>
-        <div className="with-margin">
-          <div>
-            <div className="section-label" style={{ marginBottom: 'var(--r6)' }}>
-              <span>§00 — Entry</span>
-            </div>
-            <h1
-              className="display hero-title"
-              style={{ marginBottom: 'var(--r7)' }}
-            >
-              A website<br />
-              reads as a<br />
-              <em style={{ fontStyle: 'italic', color: 'var(--accent)' }}>design system</em>.
-            </h1>
-            <p className="prose" style={{ fontSize: 20, lineHeight: 1.4, maxWidth: '46ch' }}>
-              designlang crawls any URL and returns its complete design language —
-              tokens, typography, spacing, shadows, components, regions, health,
-              remediations — in W3C DTCG format, with native emitters for iOS,
-              Android, Flutter and WordPress, and a live MCP server your editor can read.
-            </p>
-          </div>
-          <Marginalia>
-            <div>extraction runtime</div>
-            <div>
-              <code>Playwright 1.59</code>
-              <br />
-              <code>@sparticuz/chromium</code>
-            </div>
-            <hr style={{ margin: '12px 0', border: 0, borderTop: '1px solid var(--ink-3)' }} />
-            <div>default invocation</div>
-            <div><code>$ npx designlang &lt;url&gt;</code></div>
-            <p className="foot" style={{ marginTop: 12 }}>
-              Works without install. Playwright fetches Chromium on first run;
-              ≈ 3–6 seconds per page on a modern laptop.
-            </p>
-          </Marginalia>
-        </div>
-
-        <HeroExtractor />
-      </section>
-
-      {/* ── §01 DTCG BROWSER ──────────────────────────────── */}
-      <section id="features">
-        <Rule number="01" label="DTCG token browser" />
-        <div style={{ padding: 'var(--r6) 0' }}>
-          <TokenBrowser />
-        </div>
-      </section>
-
-      {/* ── §02 MCP ───────────────────────────────────────── */}
-      <section>
-        <Rule number="02" label="MCP server" />
-        <McpSection />
-      </section>
-
-      {/* ── §03 MULTI-PLATFORM ────────────────────────────── */}
-      <section>
-        <Rule number="03" label="Multi-platform emitters" />
-        <PlatformTabs />
-      </section>
-
-      {/* ── §04 HEALTH ────────────────────────────────────── */}
-      <section>
-        <CssHealth />
-      </section>
-
-      {/* ── §05 REMEDIATION ───────────────────────────────── */}
-      <section>
-        <A11ySlider />
-      </section>
-
-      {/* ── §06 REGIONS + COMPONENTS ──────────────────────── */}
-      <section>
-        <RegionsComponents />
-      </section>
-
-      {/* ── §07 SPECIMENS ─────────────────────────────────── */}
-      <section id="specimens">
-        <Rule number="07" label="Specimens" />
-        <Specimens />
-      </section>
-
-      {/* ── §08 COMPARISON ────────────────────────────────── */}
-      <section>
-        <Rule number="08" label="Compared" />
-        <Comparison />
-      </section>
-
-      {/* ── §09 INSTALL ───────────────────────────────────── */}
-      <section id="install" style={{ paddingBottom: 'var(--r9)' }}>
-        <Rule number="09" label="Install" />
-        <InstallTracks />
-      </section>
-
-      {/* ── FOOTER ───────────────────────────────────────── */}
-      <SiteFooter />
+    <main>
+      <Hero />
+      <ExtractSection />
+      <FeaturesSection />
+      <RedditSection />
+      <GallerySection />
+      <SeoCopySection />
+      <FaqSection />
+      <CtaSection />
     </main>
-  );
-}
-
-function InstallTracks() {
-  const preStyle = {
-    padding: 'var(--r4) var(--r5)',
-    background: 'var(--ink)',
-    color: 'var(--paper)',
-    fontSize: 13,
-    lineHeight: 1.7,
-    overflowX: 'auto',
-    whiteSpace: 'pre',
-  };
-  const colHead = {
-    fontFamily: 'var(--font-mono)',
-    fontSize: 11,
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    color: 'var(--ink-2)',
-    marginBottom: 'var(--r3)',
-  };
-  const colTitle = {
-    fontSize: 36,
-    lineHeight: 1,
-    letterSpacing: '-0.02em',
-    marginBottom: 'var(--r4)',
-  };
-
-  return (
-    <div style={{ marginTop: 'var(--r5)' }}>
-      <div className="install-grid">
-        {/* CLI */}
-        <div className="install-col">
-          <div style={colHead}>track 01</div>
-          <h3 className="display" style={colTitle}>CLI</h3>
-          <p style={{ fontSize: 14, color: 'var(--ink-2)', marginBottom: 'var(--r3)', maxWidth: '34ch' }}>
-            Zero install via npx. Node ≥ 20.
-          </p>
-          <pre className="mono" style={preStyle}>
-{`1  $ npx designlang <url>
-2  $ npx designlang <url> --platforms all
-3  $ npx designlang <url> --emit-agent-rules
-4  $ npx designlang <url> --tokens-legacy
-5  $ npx designlang <url> --dark`}
-          </pre>
-        </div>
-
-        {/* MCP */}
-        <div className="install-col">
-          <div style={colHead}>track 02</div>
-          <h3 className="display" style={colTitle}>MCP server</h3>
-          <p className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 'var(--r3)' }}>
-            claude_desktop_config.json / ~/.cursor/mcp.json
-          </p>
-          <pre className="mono" style={preStyle}>
-{`{
-  "mcpServers": {
-    "designlang": {
-      "command": "npx",
-      "args": [
-        "designlang",
-        "mcp",
-        "--output-dir",
-        "./design-extract-output"
-      ]
-    }
-  }
-}`}
-          </pre>
-          <p style={{ fontSize: 13, color: 'var(--ink-2)', marginTop: 'var(--r3)', fontStyle: 'italic', fontFamily: 'var(--font-display)' }}>
-            Once connected, every MCP-aware agent can query your last extraction.
-          </p>
-        </div>
-
-        {/* Agent rules */}
-        <div className="install-col">
-          <div style={colHead}>track 03</div>
-          <h3 className="display" style={colTitle}>Agent rules</h3>
-          <p style={{ fontSize: 14, color: 'var(--ink-2)', marginBottom: 'var(--r3)', maxWidth: '34ch' }}>
-            One flag emits ready-to-commit rules for every popular agent.
-          </p>
-          <pre className="mono" style={preStyle}>
-{`$ npx designlang <url> --emit-agent-rules`}
-          </pre>
-          <ul
-            className="mono"
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              marginTop: 'var(--r3)',
-              fontSize: 12,
-              lineHeight: 1.9,
-              color: 'var(--ink-2)',
-            }}
-          >
-            <li>.cursor/rules/designlang.mdc</li>
-            <li>.claude/skills/designlang/SKILL.md</li>
-            <li>CLAUDE.md.fragment</li>
-            <li>agents.md</li>
-          </ul>
-        </div>
-      </div>
-
-      <style>{`
-        .install-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 0;
-        }
-        .install-col {
-          padding: 0 var(--r5);
-        }
-        .install-col:first-child { padding-left: 0; }
-        .install-col:last-child { padding-right: 0; }
-        .install-col + .install-col {
-          border-left: 1px solid var(--ink);
-        }
-        @media (max-width: 860px) {
-          .install-grid { grid-template-columns: 1fr; gap: var(--r6); }
-          .install-col { padding: 0; }
-          .install-col + .install-col { border-left: 0; border-top: 1px solid var(--ink); padding-top: var(--r5); }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function SiteFooter() {
-  const colHead = {
-    fontFamily: 'var(--font-mono)',
-    fontSize: 11,
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    color: 'var(--ink-2)',
-    marginBottom: 'var(--r3)',
-  };
-  const linkStyle = {
-    display: 'block',
-    fontFamily: 'var(--font-mono)',
-    fontSize: 12,
-    padding: '6px 0',
-    borderBottom: '1px solid var(--paper-3)',
-    color: 'var(--ink)',
-  };
-  return (
-    <footer style={{ paddingBottom: 'var(--r7)' }}>
-      <div className="rule" role="separator" aria-label="end">
-        <div className="rule-line" />
-        <div className="chip mono" style={{ textTransform: 'uppercase', letterSpacing: '0.14em' }}>END</div>
-      </div>
-
-      <div
-        className="grid-12"
-        style={{ paddingTop: 'var(--r6)', paddingBottom: 'var(--r5)' }}
-      >
-        <div style={{ gridColumn: 'span 3' }}>
-          <div className="mono" style={{ fontSize: 14, letterSpacing: '0.02em' }}>designlang</div>
-          <p style={{ fontSize: 12, color: 'var(--ink-2)', marginTop: 8, fontFamily: 'var(--font-mono)' }}>
-            Built in Node, Playwright, and opinion.
-          </p>
-        </div>
-
-        <div style={{ gridColumn: 'span 3' }}>
-          <div style={colHead}>community</div>
-          <a href="https://github.com/Manavarya09/design-extract" style={linkStyle}>GitHub</a>
-          <a href="https://www.npmjs.com/package/designlang" style={linkStyle}>npm</a>
-          <a href="https://github.com/Manavarya09/design-extract/discussions" style={linkStyle}>Discussions</a>
-          <a href="https://github.com/Manavarya09/design-extract/issues" style={linkStyle}>Issues</a>
-          <a href="https://github.com/sponsors/Manavarya09" style={linkStyle}>Sponsor</a>
-        </div>
-
-        <div style={{ gridColumn: 'span 3' }}>
-          <div style={colHead}>reference</div>
-          <a href="https://github.com/Manavarya09/design-extract#cli" style={linkStyle}>CLI docs</a>
-          <a href="https://github.com/Manavarya09/design-extract#mcp" style={linkStyle}>MCP server</a>
-          <a href="https://github.com/Manavarya09/design-extract#agent-rules" style={linkStyle}>Cursor rules</a>
-          <a href="https://github.com/Manavarya09/design-extract/blob/main/CHANGELOG.md" style={linkStyle}>CHANGELOG</a>
-        </div>
-
-        <div style={{ gridColumn: 'span 3' }}>
-          <div style={colHead}>colophon</div>
-          <p style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', lineHeight: 1.6 }}>
-            v7.0 · MIT · Manav Arya Singh · 2026.
-          </p>
-          <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 10, fontFamily: 'var(--font-mono)', lineHeight: 1.6 }}>
-            Set in Fraunces (Undercase), Instrument Sans (Instrument), and JetBrains Mono (JetBrains).
-          </p>
-        </div>
-      </div>
-
-      <div
-        className="mono"
-        style={{
-          fontSize: 11,
-          color: 'var(--ink-3)',
-          borderTop: '1px solid var(--paper-3)',
-          paddingTop: 'var(--r3)',
-          letterSpacing: '0.04em',
-        }}
-      >
-        Extracted, not generated.
-      </div>
-    </footer>
   );
 }
