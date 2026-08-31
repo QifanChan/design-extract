@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { extractColors } from '../src/extractors/colors.js';
+import { buildRamp, buildSemanticPairs, contrast } from '../src/extractors/color-ramps.js';
 import { extractTypography, inferTypeRatio, parseFluidValue } from '../src/extractors/typography.js';
 import { extractSpacing } from '../src/extractors/spacing.js';
 import { extractShadows } from '../src/extractors/shadows.js';
@@ -1030,5 +1031,73 @@ describe('layout system', () => {
     assert.equal(system.container, null);
     assert.equal(system.rhythm, null);
     assert.equal(system.density, null);
+  });
+});
+
+// ── Color system (v13.2) ────────────────────────────────────────
+
+describe('color ramps and pairs', () => {
+  it('builds a perceptually even ramp that keeps the source colour', () => {
+    const ramp = buildRamp('#4f46e5');
+    assert.equal(ramp.base, '#4f46e5');
+    assert.equal(ramp.steps[ramp.anchor], '#4f46e5');
+    assert.equal(Object.keys(ramp.steps).length, 11);
+    // Light steps really are lighter than dark ones.
+    const lum = (hex) => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16);
+    assert.ok(lum(ramp.steps['50']) > lum(ramp.steps['500']));
+    assert.ok(lum(ramp.steps['500']) > lum(ramp.steps['950']));
+  });
+
+  it('returns null for an unparseable colour', () => {
+    assert.equal(buildRamp('not-a-colour'), null);
+  });
+
+  it('measures contrast', () => {
+    assert.equal(contrast('#ffffff', '#000000'), 21);
+  });
+
+  it('picks the foreground that actually passes on each surface', () => {
+    const pairs = buildSemanticPairs({
+      backgrounds: ['#ffffff', '#f8fafc'],
+      text: ['#0f172a'],
+      primary: { hex: '#4f46e5' },
+    });
+    const action = pairs.find(p => p.role === 'action.primary');
+    assert.equal(action.foreground, '#ffffff');
+    assert.equal(action.level, 'AA');
+    assert.equal(action.unresolvable, false);
+  });
+
+  it('falls back outside the palette when no site colour passes', () => {
+    const pairs = buildSemanticPairs({ backgrounds: ['#808080'], text: ['#7a7a7a'] });
+    assert.equal(pairs[0].fromPalette, false);
+    assert.equal(pairs[0].foreground, '#000000');
+    assert.equal(pairs[0].unresolvable, false);
+  });
+
+  it('prefers a passing colour the site already ships', () => {
+    const pairs = buildSemanticPairs({ backgrounds: ['#ffffff'], text: ['#0f172a'] });
+    assert.equal(pairs[0].foreground, '#0f172a');
+    assert.equal(pairs[0].fromPalette, true);
+  });
+
+  it('ranks colours by painted area, not by declaration count', () => {
+    const styles = [
+      makeEl({ backgroundColor: 'rgb(255, 255, 255)', area: 900000 }),
+      ...Array.from({ length: 40 }, () => makeEl({ backgroundColor: 'rgb(20, 20, 20)', area: 400 })),
+    ];
+    const colors = extractColors(styles);
+    assert.equal(colors.dominance[0].hex, '#ffffff');
+    assert.ok(colors.dominance[0].areaShare > 0.9);
+  });
+
+  it('attaches ramps for the named roles', () => {
+    const colors = extractColors([
+      makeEl({ tag: 'button', backgroundColor: 'rgb(79, 70, 229)', area: 5000 }),
+      makeEl({ backgroundColor: 'rgb(255, 255, 255)', area: 900000 }),
+    ]);
+    assert.ok(colors.ramps.primary);
+    assert.equal(colors.ramps.primary.base, '#4f46e5');
+    assert.ok(colors.pairs.length > 0);
   });
 });

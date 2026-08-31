@@ -27,6 +27,52 @@ export function formatMarkdown(design) {
     lines.push('');
   }
 
+  if (colors.ramps && Object.keys(colors.ramps).length > 0) {
+    lines.push('### Tonal Ramps');
+    lines.push('');
+    lines.push('Generated in OKLCH from each role colour, so the steps are perceptually even. The site\'s own colour keeps its position in the ladder.');
+    lines.push('');
+    const stepNames = Object.keys(Object.values(colors.ramps)[0].steps);
+    lines.push(`| Role | ${stepNames.join(' | ')} |`);
+    lines.push(`|------|${stepNames.map(() => '-----').join('|')}|`);
+    for (const [role, ramp] of Object.entries(colors.ramps)) {
+      const cells = stepNames.map(n => (n === ramp.anchor ? `**\`${ramp.steps[n]}\`**` : `\`${ramp.steps[n]}\``));
+      lines.push(`| ${role} | ${cells.join(' | ')} |`);
+    }
+    lines.push('');
+  }
+
+  if (colors.pairs?.length > 0) {
+    lines.push('### Semantic Pairs');
+    lines.push('');
+    lines.push('| Role | Background | Foreground | Contrast | Level |');
+    lines.push('|------|------------|------------|----------|-------|');
+    for (const p of colors.pairs) {
+      const flag = p.unresolvable ? ' ⚠' : (p.fromPalette ? '' : ' *');
+      lines.push(`| \`${p.role}\` | \`${p.background}\` | \`${p.foreground || '—'}\` | ${p.ratio ?? '—'}:1 | ${p.level}${flag} |`);
+    }
+    lines.push('');
+    if (colors.pairs.some(p => !p.fromPalette)) {
+      lines.push('\\* No colour the site already uses for text reaches 4.5:1 on that surface — the foreground shown is black or white, substituted in.');
+      lines.push('');
+    }
+    if (colors.pairs.some(p => p.unresolvable)) {
+      lines.push('⚠ marks a surface where nothing, not even black or white, reaches 4.5:1.');
+      lines.push('');
+    }
+  }
+
+  if (colors.dominance?.length > 0) {
+    lines.push('### Dominance');
+    lines.push('');
+    lines.push('Share of painted background area — what the page looks like, as opposed to what it declares most often.');
+    lines.push('');
+    for (const d of colors.dominance.slice(0, 6)) {
+      lines.push(`- \`${d.hex}\` — ${Math.round(d.areaShare * 100)}%`);
+    }
+    lines.push('');
+  }
+
   if (colors.neutrals.length > 0) {
     lines.push('### Neutral Colors');
     lines.push('');

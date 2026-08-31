@@ -79,6 +79,17 @@ function buildPrimitive(design) {
     if (cv) text[`text${i}`] = token(cv, 'color');
   }
 
+  // Tonal ramps, emitted as their own primitive group so semantic tokens can
+  // reference a step (`primitive.color.ramp.primary.600`) instead of a hex.
+  const ramp = {};
+  for (const [role, r] of Object.entries(design.colors?.ramps || {})) {
+    const steps = {};
+    for (const [step, hex] of Object.entries(r.steps || {})) {
+      steps[step] = token(hex, 'color');
+    }
+    if (Object.keys(steps).length > 0) ramp[role] = steps;
+  }
+
   const color = {
     brand: {
       primary: token(brand, 'color'),
@@ -87,6 +98,7 @@ function buildPrimitive(design) {
     neutral: neutrals,
     background,
     text,
+    ...(Object.keys(ramp).length > 0 && { ramp }),
   };
 
   const spacing = {};
@@ -147,6 +159,18 @@ function buildSemantic(design, primitive) {
     color.action.secondary = token(ref('primitive.color.brand.secondary'), 'color');
   }
 
+  // Measured surface/foreground pairs. `onX` is the colour that actually
+  // reaches contrast on that surface, not an assumed white.
+  for (const pair of design.colors?.pairs || []) {
+    const [group, name] = pair.role.split('.');
+    if (!group || !name) continue;
+    color[group] = color[group] || {};
+    if (!color[group][name]) color[group][name] = token(pair.background, 'color');
+    if (pair.foreground) {
+      color[group][`on${name[0].toUpperCase()}${name.slice(1)}`] = token(pair.foreground, 'color');
+    }
+  }
+
   const firstFamily = fontFamilyValue(design.typography?.families?.[0]) || 'system-ui';
   // `scale` is sorted largest-first, so scale[0] is the display size — using
   // it for `typography.body` shipped the headline size as body text.
@@ -177,8 +201,12 @@ function buildSemantic(design, primitive) {
     control: token(ref(`primitive.radius.${firstRadiusKey}`), 'dimension'),
   };
 
+  // Reach for a mid rung of the elevation ladder rather than sh0, which is
+  // the faintest hairline on the page.
+  const shadowKeys = Object.keys(primitive.shadow);
+  const midShadowKey = shadowKeys[Math.floor(shadowKeys.length / 2)] || firstShadowKey;
   const shadow = {
-    elevated: token(ref(`primitive.shadow.${firstShadowKey}`), 'shadow'),
+    elevated: token(ref(`primitive.shadow.${midShadowKey}`), 'shadow'),
   };
 
   return { color, typography, radius, shadow };
